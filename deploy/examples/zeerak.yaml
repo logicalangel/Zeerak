@@ -1,0 +1,30 @@
+# Zeerak example config — minimal "Caddy box" preset.
+#
+# This is the hand-edited file (loaded from /etc/zeerak/zeerak.yaml).
+# UI/API edits are stored separately in /var/lib/zeerak/autosave.yaml.
+# See VISION.md §11 Q3.
+version: 1
+
+server:
+  listen: 127.0.0.1:7878
+  socket: /run/zeerak/zeerak.sock
+  rollback_seconds: 60
+
+tables:
+  - family: inet
+    name: zeerak-policy
+    chains:
+      - name: input
+        type: filter
+        hook: input
+        priority: 0
+        policy: drop
+        rules:
+          - expr: ct state established,related accept
+            comment: conntrack
+          - expr: iifname lo accept
+            comment: loopback
+          - expr: tcp dport 22 accept
+            comment: ssh
+          - expr: tcp dport { 80, 443 } accept
+            comment: caddy
