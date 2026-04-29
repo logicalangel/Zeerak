@@ -43,6 +43,12 @@ jobs:
           cache: true
       - name: install nftables + iproute2
         run: sudo apt-get update && sudo apt-get install -y nftables iproute2
+      - name: enable unprivileged user namespaces
+        # Ubuntu 24.04 (default `ubuntu-latest`) ships AppArmor restrictions
+        # on unprivileged userns that break `unshare -U -r -n`. Disable for
+        # the duration of the job. See LP#2046844 / launchpad/snapd discussions.
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: testkit (rootless netns)
         # `unshare -U -r -n` gives us CAP_NET_ADMIN inside a fresh user+net
         # namespace without root. The `-build.netns` tag will be set on the
