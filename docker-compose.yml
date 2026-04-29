@@ -1,0 +1,41 @@
+# Zeerak — local Docker test rig.
+#
+# Spins up zeerak-server in its own net namespace with CAP_NET_ADMIN so
+# the nftables backend works for real on macOS / Windows / Linux hosts
+# without touching the host firewall.
+#
+#   docker compose up --build
+#   curl http://127.0.0.1:7878/healthz
+#   curl http://127.0.0.1:7878/status
+#
+# To exercise the full stage→confirm flow:
+#   curl -X POST --data-binary @deploy/examples/zeerak-presets.yaml \
+#        http://127.0.0.1:7878/preview
+#
+services:
+  zeerak:
+    build:
+      context: .
+      args:
+        VERSION: 0.1.0-compose
+    container_name: zeerak
+    # nftables needs CAP_NET_ADMIN. We do NOT use --network=host: the
+    # container has its own netns, so playing with rules here is safe.
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "127.0.0.1:7878:7878"
+    volumes:
+      # Mount your config read-only; edit on the host, restart container.
+      - ./deploy/examples/zeerak.yaml:/etc/zeerak/zeerak.yaml:ro
+      # Persist autosave between restarts.
+      - zeerak-state:/var/lib/zeerak
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7878/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  zeerak-state:

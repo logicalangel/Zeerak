@@ -1,0 +1,21 @@
+# Build artefacts
+/zeerak-server
+/out/
+
+# Local dev
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Git
+.git/
+.github/
+
+# Docs we don't need in the image
+*.md
