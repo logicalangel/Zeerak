@@ -16,12 +16,14 @@ A full router OS. Use OPNsense/pfSense for that. Zeerak is for the single-VPS / 
 ## Quick links
 
 - 📜 [VISION.md](VISION.md) — design doc, roadmap, open questions
-- 💬 Discussions — *(coming soon)*
+- 💬 Discussions — _(coming soon)_
 
 ## Stack
 
-Go · HTMX · Svelte islands · Tailwind · SQLite · nftables (netlink)
+Go · HTMX · Svelte islands · Tailwind · shadcn-svelte · nftables (netlink, via [`google/nftables`](https://github.com/google/nftables))
+
+No database. The running config is a single YAML file (hand-edit `/etc/zeerak/zeerak.yaml`, or let the UI manage `/var/lib/zeerak/autosave.yaml`) — Caddy-style. Audit lives in `journald`, history lives in `git`.
 
 ## License
 
-TBD — see [VISION.md §8](VISION.md#8-open-questions-lets-discuss).
+[Apache-2.0](LICENSE). The **"Zeerak" name and logo are reserved** to the upstream project — see [TRADEMARKS.md](TRADEMARKS.md). Forks welcome; pick your own name.

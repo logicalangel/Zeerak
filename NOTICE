@@ -1,0 +1,11 @@
+Zeerak — A lightweight web GUI firewall for nftables
+Copyright 2026 The Zeerak Authors
+
+This product includes software developed by The Zeerak Authors and contributors
+(https://github.com/zeerak/zeerak).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The "Zeerak" name and logo are reserved trademarks of the upstream project.
+See TRADEMARKS.md for the trademark policy. Forks and derivative works are
+welcome under Apache-2.0 but must use a different name.

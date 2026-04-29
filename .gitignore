@@ -14,9 +14,11 @@
 /web/.svelte-kit/
 
 # Local data
-*.sqlite
-*.sqlite-journal
 /data/
+/var/
+
+# Autosave (when running locally outside /var/lib/zeerak)
+autosave.yaml
 
 # Editors
 .vscode/*
