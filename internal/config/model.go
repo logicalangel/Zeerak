@@ -4,12 +4,22 @@ import "github.com/zeerak/zeerak/internal/model"
 
 // ToRuleset projects the YAML config into the internal model.
 //
-// Every table emitted from the config is marked Owned=true: by definition,
-// anything the operator wrote in zeerak.yaml is Zeerak-managed. Tables not
-// in the YAML stay untouched on the kernel side (defense in depth via the
-// renderer's Owned filter and nft.Apply).
+// Compilation order:
+//
+//  1. Presets (caddy_box, ssh, default_deny_inbound) -> single inet table
+//     `zeerak-presets`. Skipped if no preset is enabled.
+//  2. Raw `tables:` from the YAML, in declared order.
+//
+// Every emitted table is marked Owned=true: by definition, anything the
+// operator wrote in zeerak.yaml is Zeerak-managed. Tables not in the YAML
+// stay untouched on the kernel side.
 func (c *Config) ToRuleset() *model.Ruleset {
-	rs := &model.Ruleset{Tables: make([]model.Table, 0, len(c.Tables))}
+	rs := &model.Ruleset{Tables: make([]model.Table, 0, 1+len(c.Tables))}
+
+	if t := c.Presets.Compile(); t != nil {
+		rs.Tables = append(rs.Tables, *t)
+	}
+
 	for _, t := range c.Tables {
 		mt := model.Table{
 			Family: model.Family(t.Family),

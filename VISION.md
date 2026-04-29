@@ -365,10 +365,10 @@ The assistant proposes; the human commits. Always.
 - [x] HTTP API on loopback + unix socket: `/status` `/stage` `/confirm` `/rollback`
 - [x] Structured logs (`log/slog` JSON → journald via stderr)
 - [x] **Test kit v0**: netns harness wired into CI under `unshare -U -r -n`
+- [x] Presets: "Caddy box", "SSH from my IP" (with v4/v6 allowlist), "default deny inbound"
+- [x] Caddyfile example + systemd unit (CAP_NET_ADMIN-only, hardened)
 - [ ] Read current nftables ruleset, render in UI (read-only)
 - [ ] Diff/preview view between staged candidate and live ruleset
-- [ ] Presets: "Caddy box", "SSH from my IP", "default deny inbound"
-- [ ] Caddyfile example + systemd unit
 
 ### v0.2 — Integrations
 

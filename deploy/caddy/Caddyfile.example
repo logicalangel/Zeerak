@@ -1,0 +1,51 @@
+# Example Caddyfile — front Zeerak's HTTP API with TLS and forward_auth.
+#
+# VISION.md §11 Q2: Zeerak ships zero built-in auth and listens on
+# 127.0.0.1:7878 (or a unix socket). The reverse proxy is what makes it
+# safe to expose. Caddy here gives you:
+#
+#   - automatic Let's Encrypt TLS (HTTPS-only, HSTS by default)
+#   - forward_auth offload to your SSO of choice (Authelia/Authentik/
+#     Pocket-ID); swap basic_auth in for a homelab quickstart
+#   - access log to journald
+#
+# Install:  cp Caddyfile.example /etc/caddy/Caddyfile  &&  systemctl reload caddy
+# Test:     curl -fsS https://zeerak.example.com/healthz   (after auth)
+
+zeerak.example.com {
+	# Uncomment for a 5-minute homelab setup; replace later with forward_auth.
+	#
+	# basicauth /* {
+	#   admin $2a$14$REPLACE_WITH_OUTPUT_OF_caddy_hash-password
+	# }
+
+	# Recommended: delegate auth to your SSO. Zeerak never sees credentials.
+	forward_auth https://auth.example.com {
+		uri /api/verify?rd=https://auth.example.com
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+
+	# Proxy to the daemon. Default loopback bind is 127.0.0.1:7878.
+	reverse_proxy 127.0.0.1:7878 {
+		# Pass the original host so Zeerak can build absolute URLs in HTMX.
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Send Caddy's access log to journald (matches Zeerak's slog->journald).
+	log {
+		output stderr
+		format json
+	}
+}
+
+# --- Alternative: unix socket ----------------------------------------------
+#
+# If you'd rather have Zeerak bind only to the socket (zero TCP attack
+# surface on loopback), start it with `--listen "" --socket /run/zeerak/zeerak.sock`
+# and use this block instead of `reverse_proxy 127.0.0.1:7878`:
+#
+#   reverse_proxy unix//run/zeerak/zeerak.sock
+#
+# Make sure the `caddy` user is in the `zeerak` group so the 0660 socket
+# is readable: `usermod -a -G zeerak caddy && systemctl restart caddy`.

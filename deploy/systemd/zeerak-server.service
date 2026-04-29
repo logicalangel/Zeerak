@@ -1,0 +1,69 @@
+[Unit]
+Description=Zeerak — nftables-native firewall daemon
+Documentation=https://github.com/zeerak/zeerak
+# We need the network up so loopback + the unix-socket path's tmpfs are ready.
+After=network-pre.target
+Wants=network-pre.target
+# Conflict-but-don't-stop with other firewall front-ends. Operators using
+# firewalld / ufw should disable them before enabling zeerak.
+Conflicts=firewalld.service ufw.service nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/zeerak-server --config /etc/zeerak/zeerak.yaml
+
+# SIGHUP -> config reload (read /etc/zeerak/zeerak.yaml, stage+apply).
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Run as a dedicated user; the daemon needs CAP_NET_ADMIN to talk to nftables
+# and that's it. No root.
+User=zeerak
+Group=zeerak
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+
+# State + runtime dirs (systemd creates and chowns these).
+RuntimeDirectory=zeerak
+RuntimeDirectoryMode=0750
+StateDirectory=zeerak
+StateDirectoryMode=0750
+ConfigurationDirectory=zeerak
+ConfigurationDirectoryMode=0750
+
+# Default unix socket lives in /run/zeerak/ (RuntimeDirectory above).
+# Default autosave lives in /var/lib/zeerak/ (StateDirectory above).
+# Default config lives in /etc/zeerak/ (ConfigurationDirectory above).
+
+# Hardening (VISION.md §11 Q11 — telemetry is none, attack surface is small).
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Allow only what the daemon actually needs.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# Auto-restart on crash. Keep the firewall up; the staged ruleset persists
+# in the kernel so a brief daemon outage doesn't open ports.
+Restart=on-failure
+RestartSec=2s
+
+# Structured logs (VISION.md §3): slog JSON -> stderr -> journald.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

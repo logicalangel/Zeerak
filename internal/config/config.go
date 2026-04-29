@@ -17,6 +17,8 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/zeerak/zeerak/internal/policy"
 )
 
 // DefaultPath is the canonical hand-edited config location.
@@ -34,7 +36,10 @@ const DefaultAutosavePath = "/var/lib/zeerak/autosave.yaml"
 type Config struct {
 	Version int    `yaml:"version"` // schema version; only 1 is valid in v0.1
 	Server  Server `yaml:"server,omitempty"`
-	// Raw nftables-mirror objects. Higher-level policy shapes are added later.
+	// Higher-level presets (caddy_box, ssh, default_deny_inbound) compile to
+	// the table `inet zeerak-presets` via internal/policy. See VISION.md §11 Q1.
+	Presets policy.Presets `yaml:"presets,omitempty"`
+	// Raw nftables-mirror objects. Layered on top of the compiled presets.
 	Tables []TableSpec `yaml:"tables,omitempty"`
 }
 
@@ -91,6 +96,9 @@ func Load(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	if c.Version != 1 {
 		return fmt.Errorf("unsupported config version %d (expected 1)", c.Version)
+	}
+	if err := c.Presets.Validate(); err != nil {
+		return err
 	}
 	for i, t := range c.Tables {
 		if t.Family == "" || t.Name == "" {

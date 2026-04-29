@@ -1,0 +1,21 @@
+# Zeerak example config — presets only.
+#
+# Same end result as zeerak.yaml (the raw nftables version) but expressed
+# as a one-liner per intent. Compiles to `inet zeerak-presets` via
+# internal/policy. See VISION.md §11 Q1.
+version: 1
+
+server:
+  listen: 127.0.0.1:7878
+  socket: /run/zeerak/zeerak.sock
+  rollback_seconds: 60
+
+presets:
+  default_deny_inbound: true     # policy drop on input + ct/lo accept
+  ssh:
+    port: 22
+    # Uncomment to lock SSH to a specific source range.
+    # from:
+    #   - 198.51.100.0/24
+    #   - 2001:db8::/32
+  caddy_box: true                # opens TCP/80 + TCP/443
