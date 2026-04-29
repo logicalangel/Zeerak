@@ -404,19 +404,19 @@ All v1 design questions are locked. Concise reference; rationale lives in
 git history (`docs: lock all §11 design decisions`) and future ADRs under
 `docs/decisions/`.
 
-| # | Question                | Decision                                                                                                                |
-| - | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1 | Rule model              | Faithful nftables mirror; higher-level policy UI compiles down to user-owned tables (e.g. `inet zeerak-policy`).        |
-| 2 | Auth                    | Zero built-in. Listen on `127.0.0.1` + unix socket; reverse proxy / SSH tunnel handles auth.                            |
-| 3 | UI vs file ownership    | Caddy-style: `/etc/zeerak/zeerak.yaml` is hand-edited (never rewritten), UI edits persist to `/var/lib/zeerak/autosave.yaml`. |
-| 4 | Cluster transport       | SSH-first using operator's existing keys; mTLS opt-in fallback.                                                         |
-| 5 | Cluster config format   | Directory tree under `/etc/zeerak/cluster/` by default; `--cluster-git-url` for GitOps mode.                            |
-| 6 | Test kit backend        | netns in CI (every PR), microVMs nightly. Releases blocked on green for both.                                           |
-| 7 | MCP commit tool         | `confirm_proposal` disabled by default; humans commit. Auto-rollback timer is a second human checkpoint.                |
-| 8 | MCP transport           | stdio **and** HTTP+SSE shipped together from day one.                                                                   |
-| 9 | Distro support          | Tier 1: Debian/Ubuntu, Fedora, Arch, Alpine (musl). Tier 2: openSUSE, NixOS, Homebrew (CLI only).                       |
-| 10 | License                | Apache-2.0 + reserved "Zeerak" name (see `TRADEMARKS.md`).                                                              |
-| 11 | Telemetry              | None, ever, in core. Optional loopback-only Prometheus `/metrics`, opt-in.                                              |
+| #   | Question              | Decision                                                                                                                      |
+| --- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Rule model            | Faithful nftables mirror; higher-level policy UI compiles down to user-owned tables (e.g. `inet zeerak-policy`).              |
+| 2   | Auth                  | Zero built-in. Listen on `127.0.0.1` + unix socket; reverse proxy / SSH tunnel handles auth.                                  |
+| 3   | UI vs file ownership  | Caddy-style: `/etc/zeerak/zeerak.yaml` is hand-edited (never rewritten), UI edits persist to `/var/lib/zeerak/autosave.yaml`. |
+| 4   | Cluster transport     | SSH-first using operator's existing keys; mTLS opt-in fallback.                                                               |
+| 5   | Cluster config format | Directory tree under `/etc/zeerak/cluster/` by default; `--cluster-git-url` for GitOps mode.                                  |
+| 6   | Test kit backend      | netns in CI (every PR), microVMs nightly. Releases blocked on green for both.                                                 |
+| 7   | MCP commit tool       | `confirm_proposal` disabled by default; humans commit. Auto-rollback timer is a second human checkpoint.                      |
+| 8   | MCP transport         | stdio **and** HTTP+SSE shipped together from day one.                                                                         |
+| 9   | Distro support        | Tier 1: Debian/Ubuntu, Fedora, Arch, Alpine (musl). Tier 2: openSUSE, NixOS, Homebrew (CLI only).                             |
+| 10  | License               | Apache-2.0 + reserved "Zeerak" name (see `TRADEMARKS.md`).                                                                    |
+| 11  | Telemetry             | None, ever, in core. Optional loopback-only Prometheus `/metrics`, opt-in.                                                    |
 
 ---
 
