@@ -1,0 +1,20 @@
+{
+  "folders": [
+    { "path": "." }
+  ],
+  "settings": {
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "[markdown]": {
+      "editor.wordWrap": "on"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "golang.go",
+      "svelte.svelte-vscode",
+      "bradlc.vscode-tailwindcss",
+      "yzhang.markdown-all-in-one"
+    ]
+  }
+}

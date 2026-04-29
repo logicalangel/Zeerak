@@ -1,0 +1,30 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+
+# Node / web build
+/node_modules/
+/web/dist/
+/web/.svelte-kit/
+
+# Local data
+*.sqlite
+*.sqlite-journal
+/data/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+.DS_Store
+
+# Env
+.env
+.env.local
