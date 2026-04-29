@@ -94,7 +94,7 @@ func run(ctx context.Context, logger *slog.Logger, agentMode bool, configPath, l
 	}
 	logger.Info("boot apply ok", "tables", len(cfg.Tables))
 
-	apiSrv := api.New(stg, logger, Version)
+	apiSrv := api.New(stg, adapter, logger, Version)
 	if err := apiSrv.Serve(ctx, listen, socketPath); err != nil {
 		return fmt.Errorf("api: %w", err)
 	}

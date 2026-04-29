@@ -15,11 +15,15 @@ import (
 	"github.com/zeerak/zeerak/internal/stager"
 )
 
-// fakeApplier is a deterministic in-memory Applier for tests.
+// fakeApplier is a deterministic in-memory Applier+Reader for tests.
 type fakeApplier struct {
 	mu      sync.Mutex
 	current *model.Ruleset
 	applies int
+
+	// Pre-canned live text for /ruleset/live and /preview.
+	liveText  string
+	liveTable map[string]string // key = "family name"
 }
 
 func (f *fakeApplier) Snapshot(_ context.Context) (*model.Ruleset, error) {
@@ -40,10 +44,18 @@ func (f *fakeApplier) Apply(_ context.Context, rs *model.Ruleset) error {
 	return nil
 }
 
+func (f *fakeApplier) LiveText(_ context.Context) (string, error) {
+	return f.liveText, nil
+}
+
+func (f *fakeApplier) LiveTable(_ context.Context, family model.Family, name string) (string, error) {
+	return f.liveTable[string(family)+" "+name], nil
+}
+
 func newTestServer(t *testing.T, opts ...stager.Option) (*Server, *fakeApplier) {
 	t.Helper()
-	a := &fakeApplier{}
-	s := New(stager.New(a, opts...), nil, "test")
+	a := &fakeApplier{liveTable: map[string]string{}}
+	s := New(stager.New(a, opts...), a, nil, "test")
 	return s, a
 }
 
@@ -161,5 +173,66 @@ func TestMethodNotAllowed(t *testing.T) {
 	rec := do(t, s.Handler(), "GET", "/stage", "")
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("got %d, want 405", rec.Code)
+	}
+}
+
+func TestRulesetLive(t *testing.T) {
+	s, a := newTestServer(t)
+	a.liveText = "table inet filter { }\n"
+	rec := do(t, s.Handler(), "GET", "/ruleset/live", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d", rec.Code)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["text"] != a.liveText {
+		t.Fatalf("text=%q, want %q", got["text"], a.liveText)
+	}
+}
+
+func TestPreview_DiffAgainstLive(t *testing.T) {
+	s, a := newTestServer(t)
+	// Pretend the kernel has an older version of zeerak-presets without ssh.
+	a.liveTable["inet zeerak-presets"] = "table inet zeerak-presets {\n\tchain input {\n\t\ttype filter hook input priority 0; policy drop;\n\t}\n}\n"
+
+	rec := do(t, s.Handler(), "POST", "/preview", stageYAML)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var got map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["rendered"] == "" {
+		t.Fatal("rendered missing")
+	}
+	if got["diff"] == "" {
+		t.Fatalf("diff missing; live=%q rendered=%q", got["live"], got["rendered"])
+	}
+	if !bytes.Contains([]byte(got["diff"]), []byte("--- live\n+++ candidate")) {
+		t.Fatalf("diff header wrong: %q", got["diff"])
+	}
+}
+
+func TestPreview_NoMutation(t *testing.T) {
+	s, a := newTestServer(t)
+	if rec := do(t, s.Handler(), "POST", "/preview", stageYAML); rec.Code != http.StatusOK {
+		t.Fatalf("preview: %d", rec.Code)
+	}
+	if a.applies != 0 {
+		t.Fatalf("preview applied %d times, want 0", a.applies)
+	}
+	if got := s.stg.Status().State.String(); got != "idle" {
+		t.Fatalf("state=%q, want idle", got)
+	}
+}
+
+func TestPreview_InvalidYAML(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := do(t, s.Handler(), "POST", "/preview", "version: 99\n")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400", rec.Code)
 	}
 }

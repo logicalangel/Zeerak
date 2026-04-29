@@ -83,6 +83,34 @@ func (a *linuxAdapter) Apply(ctx context.Context, rs *model.Ruleset) error {
 	return nil
 }
 
+// LiveText shells `nft list ruleset` and returns its stdout. The output
+// includes every table on the host, owned or not — that's the point of the
+// read-only ruleset view.
+func (a *linuxAdapter) LiveText(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, a.nftPath, "list", "ruleset")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("nft list ruleset: %w", err)
+	}
+	return string(out), nil
+}
+
+// LiveTable shells `nft list table FAMILY NAME`. A missing table is not an
+// error here — we return ("", nil) so /preview can diff a candidate that
+// creates a brand-new table.
+func (a *linuxAdapter) LiveTable(ctx context.Context, family model.Family, name string) (string, error) {
+	cmd := exec.CommandContext(ctx, a.nftPath, "list", "table", string(family), name)
+	out, err := cmd.Output()
+	if err != nil {
+		// nft prints "Error: No such file or directory" on stderr and exits 1.
+		if ee, ok := err.(*exec.ExitError); ok && bytes.Contains(ee.Stderr, []byte("No such file or directory")) {
+			return "", nil
+		}
+		return "", fmt.Errorf("nft list table %s %s: %w", family, name, err)
+	}
+	return string(out), nil
+}
+
 // cloneRuleset returns a defensive copy. Cheap because rules are tiny
 // strings; we never mutate slices in place anyway, but the stager keeps a
 // long-lived snapshot reference and we don't want shared backing arrays.

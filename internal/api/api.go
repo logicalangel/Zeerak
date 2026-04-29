@@ -33,22 +33,33 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/zeerak/zeerak/internal/config"
+	"github.com/zeerak/zeerak/internal/diff"
+	"github.com/zeerak/zeerak/internal/model"
+	"github.com/zeerak/zeerak/internal/render"
 	"github.com/zeerak/zeerak/internal/stager"
 )
+
+// Reader is the read-only kernel view used by /ruleset/live and /preview.
+// internal/nft.Adapter satisfies it; tests provide a fake.
+type Reader interface {
+	LiveText(ctx context.Context) (string, error)
+	LiveTable(ctx context.Context, family model.Family, name string) (string, error)
+}
 
 // Server is the HTTP control plane.
 type Server struct {
 	stg     *stager.Stager
+	reader  Reader
 	logger  *slog.Logger
 	version string
 }
 
-// New returns a Server backed by stg.
-func New(stg *stager.Stager, logger *slog.Logger, version string) *Server {
+// New returns a Server backed by stg + reader.
+func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Server{stg: stg, logger: logger, version: version}
+	return &Server{stg: stg, reader: reader, logger: logger, version: version}
 }
 
 // Handler returns the http.Handler exposing all API routes.
@@ -57,6 +68,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /version", s.handleVersion)
 	mux.HandleFunc("GET /status", s.handleStatus)
+	mux.HandleFunc("GET /ruleset/live", s.handleRulesetLive)
+	mux.HandleFunc("POST /preview", s.handlePreview)
 	mux.HandleFunc("POST /stage", s.handleStage)
 	mux.HandleFunc("POST /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /rollback", s.handleRollback)
@@ -144,6 +157,66 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, statusDTO{
 		State:    st.State.String(),
 		Deadline: jsonTime(st.Deadline),
+	})
+}
+
+// handleRulesetLive returns `nft list ruleset` text. Read-only view of the
+// kernel; includes unowned tables (Docker, fail2ban, hand-written rules).
+func (s *Server) handleRulesetLive(w http.ResponseWriter, r *http.Request) {
+	text, err := s.reader.LiveText(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// handlePreview parses a candidate config, renders it, and diffs it
+// against the live ruleset (restricted to the tables the candidate would
+// touch). NO state is mutated; this is what the UI calls before /stage.
+func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("read body: %w", err))
+		return
+	}
+	var cfg config.Config
+	if err := yaml.Unmarshal(body, &cfg); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("parse yaml: %w", err))
+		return
+	}
+	if err := cfg.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	rs := cfg.ToRuleset()
+	rendered, err := render.String(rs, false)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("render: %w", err))
+		return
+	}
+
+	// Concatenate live text for each table the candidate owns. A table that
+	// doesn't exist live yet contributes the empty string.
+	var liveSb []byte
+	for _, t := range rs.Tables {
+		if !t.Owned {
+			continue
+		}
+		text, err := s.reader.LiveTable(r.Context(), t.Family, t.Name)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("live table %s %s: %w", t.Family, t.Name, err))
+			return
+		}
+		liveSb = append(liveSb, text...)
+	}
+	live := string(liveSb)
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"rendered": rendered,
+		"live":     live,
+		"diff":     diff.Unified(live, rendered, "live", "candidate"),
 	})
 }
 

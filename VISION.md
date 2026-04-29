@@ -367,8 +367,8 @@ The assistant proposes; the human commits. Always.
 - [x] **Test kit v0**: netns harness wired into CI under `unshare -U -r -n`
 - [x] Presets: "Caddy box", "SSH from my IP" (with v4/v6 allowlist), "default deny inbound"
 - [x] Caddyfile example + systemd unit (CAP_NET_ADMIN-only, hardened)
-- [ ] Read current nftables ruleset, render in UI (read-only)
-- [ ] Diff/preview view between staged candidate and live ruleset
+- [x] Read current nftables ruleset, render in UI (read-only)
+- [x] Diff/preview view between staged candidate and live ruleset
 
 ### v0.2 — Integrations
 

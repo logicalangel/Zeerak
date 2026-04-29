@@ -22,11 +22,18 @@ import (
 	"github.com/zeerak/zeerak/internal/model"
 )
 
-// Adapter is the contract this package satisfies. It matches stager.Applier
-// exactly so the stager can hold an *Adapter (Linux) or a fake (tests).
+// Adapter is the contract this package satisfies. Snapshot+Apply match
+// stager.Applier exactly so the stager can hold an *Adapter (Linux) or
+// a fake (tests). LiveText/LiveTable feed the read-only UI and the
+// /preview diff endpoint.
 type Adapter interface {
 	Snapshot(ctx context.Context) (*model.Ruleset, error)
 	Apply(ctx context.Context, rs *model.Ruleset) error
+	// LiveText returns the entire kernel ruleset as `nft list ruleset` text.
+	LiveText(ctx context.Context) (string, error)
+	// LiveTable returns `nft list table FAMILY NAME` text. A missing table
+	// returns ("", nil) so callers can diff against an empty string.
+	LiveTable(ctx context.Context, family model.Family, name string) (string, error)
 }
 
 // New returns the platform Adapter. On Linux this drives `nft`; on other

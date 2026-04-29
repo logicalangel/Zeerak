@@ -27,4 +27,12 @@ func (stubAdapter) Apply(ctx context.Context, rs *model.Ruleset) error {
 	return wrap()
 }
 
+func (stubAdapter) LiveText(ctx context.Context) (string, error) {
+	return "", wrap()
+}
+
+func (stubAdapter) LiveTable(ctx context.Context, family model.Family, name string) (string, error) {
+	return "", wrap()
+}
+
 func wrap() error { return errors.New("nft: " + runtime.GOOS + " unsupported: " + ErrUnsupported.Error()) }
