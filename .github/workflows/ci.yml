@@ -1,0 +1,51 @@
+# Zeerak CI — runs on every PR and push to main.
+#
+# Per VISION.md §11 Q6: netns-based testkit runs every PR; microVMs nightly.
+# GitHub-hosted runners can't grant CAP_NET_ADMIN to a normal step, so the
+# netns harness is exercised under `unshare -U -r -n` (rootless network
+# namespace), which is also how operators run it locally.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: go build
+        run: go build ./...
+      - name: go test
+        run: go test -race -count=1 ./...
+
+  testkit-netns:
+    name: testkit (netns)
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: install nftables + iproute2
+        run: sudo apt-get update && sudo apt-get install -y nftables iproute2
+      - name: testkit (rootless netns)
+        # `unshare -U -r -n` gives us CAP_NET_ADMIN inside a fresh user+net
+        # namespace without root. The `-build.netns` tag will be set on the
+        # netns scenario tests once they land; for now this just verifies
+        # the harness package compiles in CI.
+        run: unshare -U -r -n go test -count=1 ./testkit/...
