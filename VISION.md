@@ -89,7 +89,9 @@ Releases are reproducible, signed, and accompanied by an SBOM. No proprietary bu
                    │ HTTP on 127.0.0.1 or unix socket
 ┌──────────────────▼───────────────────────────┐
 │  zeerak-server (single Go binary)            │
-│  ├── HTTP API (chi) + HTMX views             │
+│  ├── HTTP API (net/http) + HTMX views        │
+│  │     /healthz /version /status             │
+│  │     /stage /confirm /rollback             │
 │  ├── Config loader/watcher (zeerak.yaml)     │
 │  ├── Rule engine                             │
 │  │     model → validator → nft renderer      │
@@ -113,7 +115,7 @@ Releases are reproducible, signed, and accompanied by an SBOM. No proprietary bu
 - **No user database**: Zeerak listens on `127.0.0.1` or a unix socket by default. Auth (TLS, SSO, basic auth, IP allowlist) is the reverse proxy's job — exactly the pattern Caddy itself uses for its admin API on `:2019`.
 - **No audit table**: every config change is logged to `journald` (who/what/when from the proxy + the diff), and history is whatever `git log /etc/zeerak/` tells you. `journalctl -u zeerak` is your audit trail.
 - **nftables interface**: prefer [`google/nftables`](https://github.com/google/nftables) (netlink) for reads & atomic transactions; shell out to `nft -f -` as a fallback for human-readable apply.
-- **API**: REST + OpenAPI 3.1 spec generated from code.
+- **API**: small REST surface on `net/http` (Go 1.22+ method routing — no router dep). OpenAPI 3.1 spec generated from code in v0.2.
 - **CLI**: `zeerak` binary speaks the same API over the unix socket — handy for scripts & GitOps.
 
 ### Repo layout (initial sketch)
@@ -356,15 +358,17 @@ The assistant proposes; the human commits. Always.
 
 ### v0.1 — "It works on my VPS"
 
-- [ ] `zeerak.yaml` schema + loader + validator
+- [x] `zeerak.yaml` schema + loader + validator
+- [x] Rule model + nft text renderer (round-trip fuzz against `nft -j` deferred)
+- [x] `nft -f -` kernel adapter (Linux build tag) with non-Linux stub for dev hosts
+- [x] Stager: apply → auto-rollback timer → confirm (race-tested)
+- [x] HTTP API on loopback + unix socket: `/status` `/stage` `/confirm` `/rollback`
+- [x] Structured logs (`log/slog` JSON → journald via stderr)
+- [x] **Test kit v0**: netns harness wired into CI under `unshare -U -r -n`
 - [ ] Read current nftables ruleset, render in UI (read-only)
-- [ ] Rule model + renderer + round-trip tests
-- [ ] Listen on loopback + unix socket; example Caddyfile with `forward_auth`
-- [ ] Stage → preview (diff) → commit-with-rollback
+- [ ] Diff/preview view between staged candidate and live ruleset
 - [ ] Presets: "Caddy box", "SSH from my IP", "default deny inbound"
-- [ ] Structured logs to journald
 - [ ] Caddyfile example + systemd unit
-- [ ] **Test kit v0**: netns harness + scenarios for every shipped preset, wired into CI
 
 ### v0.2 — Integrations
 

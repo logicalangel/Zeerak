@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/zeerak/zeerak/internal/api"
 	"github.com/zeerak/zeerak/internal/config"
 	"github.com/zeerak/zeerak/internal/nft"
 	"github.com/zeerak/zeerak/internal/stager"
@@ -93,12 +94,11 @@ func run(ctx context.Context, logger *slog.Logger, agentMode bool, configPath, l
 	}
 	logger.Info("boot apply ok", "tables", len(cfg.Tables))
 
-	_ = stg // TODO(v0.1): hand to internal/api for /stage /confirm /rollback.
+	apiSrv := api.New(stg, logger, Version)
+	if err := apiSrv.Serve(ctx, listen, socketPath); err != nil {
+		return fmt.Errorf("api: %w", err)
+	}
 
-	// TODO(v0.1): start HTTP API on listen + unix socket on socketPath;
-	// SIGHUP -> reload.
-
-	<-ctx.Done()
 	logger.Info("zeerak-server shutting down")
 	return nil
 }
