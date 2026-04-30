@@ -52,6 +52,131 @@ zeerak-mcp --http 127.0.0.1:7879
 
 It's strictly read-only in v0; staging tools land in v0.3.
 
+## Getting started
+
+> Zeerak is a Linux-only daemon (it shells out to `nft(8)`). On macOS / Windows, use the bundled Docker setup — see [Try it in Docker](#try-it-in-docker).
+
+### 1. Build
+
+```sh
+git clone https://github.com/logicalangel/Zeerak.git
+cd Zeerak
+go build -o out/ ./cmd/...
+# produces out/zeerak-server, out/zeerak, out/zeerak-mcp
+```
+
+Pre-built distro packages (`apt`, `dnf`, `brew`, AUR, GHCR image) are coming in v0.2 — see the roadmap.
+
+### 2. Configure
+
+Drop a config at `/etc/zeerak/zeerak.yaml`. Start from the bundled examples:
+
+```sh
+sudo install -d -m 0755 /etc/zeerak
+sudo cp deploy/examples/zeerak.yaml /etc/zeerak/zeerak.yaml
+sudoedit /etc/zeerak/zeerak.yaml      # set your SSH allowlist, presets, etc.
+```
+
+Minimal config (default-deny inbound, allow SSH from anywhere, allow Caddy on 80/443):
+
+```yaml
+version: 1
+server:
+  listen: "127.0.0.1:7878"
+  socket: "/run/zeerak/zeerak.sock"
+  rollback_seconds: 30
+presets:
+  default_deny_inbound: true
+  ssh:
+    port: 22
+  caddy_box: true
+```
+
+### 3. Run the daemon
+
+For development on a Linux host (foreground, requires `CAP_NET_ADMIN` — easiest is `sudo`):
+
+```sh
+sudo ./out/zeerak-server --config /etc/zeerak/zeerak.yaml
+```
+
+For production, install the hardened systemd unit:
+
+```sh
+sudo cp deploy/systemd/zeerak-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now zeerak-server
+journalctl -u zeerak-server -f         # structured JSON logs
+```
+
+### 4. Drive it with the CLI
+
+```sh
+# Confirm the daemon is up.
+zeerak status
+
+# See what the kernel is actually running.
+zeerak ruleset
+
+# Edit your config, then preview the diff *before* it touches the kernel.
+$EDITOR /etc/zeerak/zeerak.yaml
+zeerak preview -f /etc/zeerak/zeerak.yaml
+
+# Apply with the auto-rollback safety net:
+zeerak apply -f /etc/zeerak/zeerak.yaml          # stages — you have rollback_seconds to confirm
+zeerak confirm                                   # keep changes
+# ...or do nothing and the daemon reverts automatically.
+
+# Skip the two-step prompt (CI / GitOps):
+zeerak apply -f /etc/zeerak/zeerak.yaml --yes
+
+# Bail out of a pending stage immediately:
+zeerak rollback
+```
+
+`--addr` (or env `ZEERAK_ADDR`) overrides the daemon address — use a unix socket path or an `http://host:port` URL.
+
+### 5. Talk to it from your AI assistant (optional)
+
+Wire `zeerak-mcp` into any MCP-aware client. Example Claude Desktop entry (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "zeerak": {
+      "command": "/usr/local/bin/zeerak-mcp",
+      "args": ["--addr", "/run/zeerak/zeerak.sock"]
+    }
+  }
+}
+```
+
+The assistant can then read `zeerak://status` / `zeerak://ruleset/live` and call `explain_rule` / `simulate_packet`. It cannot mutate anything in v0.
+
+### Try it in Docker
+
+A `Dockerfile` and `docker-compose.yml` ship in the repo for non-Linux hosts and quick experimentation:
+
+```sh
+docker compose up --build -d
+docker exec zeerak wget -qO- http://127.0.0.1:7878/healthz   # → {"status":"ok"}
+docker exec zeerak zeerak status
+```
+
+Edit `deploy/examples/zeerak.yaml` on the host (it's mounted read-only into the container) and `docker compose restart` to pick up changes.
+
+### HTTP API (advanced)
+
+If you'd rather skip the CLI:
+
+```sh
+SOCK=/run/zeerak/zeerak.sock
+curl --unix-socket $SOCK http://localhost/status
+curl --unix-socket $SOCK http://localhost/ruleset/live
+curl --unix-socket $SOCK -H 'Content-Type: application/x-yaml' \
+     --data-binary @new-config.yaml http://localhost/preview
+```
+
 ## Quick links
 
 - [VISION.md](VISION.md) — design doc, roadmap, locked decisions (§11)
