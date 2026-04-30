@@ -3,7 +3,7 @@
 > A lightweight, friendly **web GUI firewall for nftables**.
 > Single binary. Safe by default. Plays nicely with Caddy.
 
-**Status:** v0.1 feature-complete on `main` — daemon, HTTP API, presets, and deploy artifacts all landed. Web UI is next (v0.2). See [VISION.md](VISION.md) for the full plan.
+**Status:** v0.1 feature-complete on `main`. v0.2 in progress — `zeerak` CLI and `zeerak-mcp` (Model Context Protocol) server are landed; Linux distro packages next. See [VISION.md](VISION.md) for the full plan.
 
 ## What it is
 
@@ -23,6 +23,34 @@ A full router OS. Use OPNsense/pfSense for that. Zeerak is for the single-VPS / 
 - Hardened `systemd` unit (CAP_NET_ADMIN-only) + example `Caddyfile` reverse-proxy config in [`deploy/`](deploy/)
 - Structured JSON logs to `journald` via stderr
 - Netns-based test kit wired into CI
+
+## CLI (v0.2)
+
+The `zeerak` CLI talks to a running daemon over its unix socket (or HTTP, via `--addr`). Useful for GitOps and shell scripts:
+
+```sh
+zeerak status                           # show stager state
+zeerak ruleset                          # dump live nftables ruleset
+zeerak preview -f new-config.yaml       # render + diff vs live
+zeerak apply   -f new-config.yaml --yes # stage + confirm in one go
+zeerak rollback                         # abort a pending stage
+```
+
+`--addr` (or env `ZEERAK_ADDR`) accepts either a socket path (default `/run/zeerak/zeerak.sock`) or an `http://host:port` URL.
+
+## MCP server (v0.2)
+
+`zeerak-mcp` exposes the daemon's read-only state to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io). It serves two resources (`zeerak://status`, `zeerak://ruleset/live`) and two tools (`explain_rule`, `simulate_packet`).
+
+```sh
+# stdio — wire into Claude Desktop, mcp-cli, etc.
+zeerak-mcp
+
+# HTTP — POST JSON-RPC 2.0 to /mcp
+zeerak-mcp --http 127.0.0.1:7879
+```
+
+It's strictly read-only in v0; staging tools land in v0.3.
 
 ## Quick links
 

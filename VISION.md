@@ -370,20 +370,24 @@ The assistant proposes; the human commits. Always.
 - [x] Read current nftables ruleset, render in UI (read-only)
 - [x] Diff/preview view between staged candidate and live ruleset
 
-### v0.2 — Integrations
+### v0.2 — CLI, packaging, MCP
 
-- [ ] Caddy admin-API panel (read-only first, then write)
-- [ ] Docker chain awareness
-- [ ] CLI (`zeerak apply -f config.yaml`) — GitOps-friendly
-- [ ] OpenAPI spec + generated client
+- [x] CLI (`zeerak apply -f config.yaml`) — GitOps-friendly
 - [ ] Public packages: `.deb` PPA, Fedora COPR, AUR, Homebrew tap, GHCR image
-- [ ] **MCP server v0** — read-only resources + `explain_rule` / `simulate_packet`, both stdio **and** HTTP+SSE transports
+- [x] **MCP server v0** — read-only resources + `explain_rule` / `simulate_packet`, stdio + HTTP transports
+
+> **Deferred to v0.3+:** Caddy admin-API panel, Docker chain awareness,
+> OpenAPI spec + generated client, MCP SSE/streaming transport. Tracked
+> but not blocking v0.2.
 
 ### v0.3 — Cluster & power features
 
 - [ ] **Cluster mode v1**: master/agent over SSH (mTLS opt-in fallback), pull sync, fleet status view
 - [ ] Cluster test-kit scenarios (partition, rollback-on-disconnect, drift)
 - [ ] **MCP server v1** — staging tools (`propose_change`, `apply_preset`), opt-in commit, sandbox mode
+- [ ] Caddy admin-API panel (read-only first, then write)
+- [ ] Docker chain awareness
+- [ ] OpenAPI spec + generated client
 - [ ] Named sets/maps editor (CIDR lists, country blocks)
 - [ ] Rate-limiting / connection-tracking rule helpers
 - [ ] Tailscale + WireGuard awareness
