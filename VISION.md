@@ -9,7 +9,6 @@
 
 Most Linux firewall front-ends fall into two camps:
 
-- **Heavyweight** (pfSense/OPNsense-style appliances) — full OSes, overkill for a single VPS or homelab box.
 - **Bare** (`nft`, `iptables`, `ufw`) — powerful but unfriendly; easy to lock yourself out, hard to reason about rule order.
 
 Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux host that gives you a clean web UI to manage **nftables** rules safely, with sensible defaults, presets for common use cases, and tight integration with tools you already use (Caddy, Docker, Tailscale, NATS, fail2ban).
@@ -30,22 +29,27 @@ Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux ho
 
 Zeerak is **open source from day one** under **Apache-2.0**, developed in public on GitHub. Issues, design discussions, and roadmap live in the repo. The Apache-2.0 license is OSI-approved, free forever for personal and commercial use — but the **"Zeerak" name and logo are reserved** to the upstream project (see `TRADEMARKS.md`). Forks are welcome; they just need to pick their own name.
 
+### In scope: anything nftables does natively
+
+If `man nft` documents it, Zeerak aims to surface it. That includes:
+
+- **NAT** — SNAT, DNAT, masquerade, redirect (the classic "router box" / port-forward case).
+- **Port forwarding** — DNAT to internal hosts with sensible hook/priority defaults so you don't have to guess.
+- **Policy routing marks** — `meta mark set`, `ct mark` for fwmark-based routing, QoS, or split-tunnel VPN.
+- **Connection tracking** — `ct state`, conntrack helpers (FTP, SIP, …), zones, ct timeouts.
+- **Rate limiting & quotas** — `limit rate`, `quota`, per-IP buckets (already partly shipped for SSH).
+- **Sets, maps, intervals, vmaps** — first-class editor for CIDR lists, country blocks, port→verdict maps.
+- **Logging & accounting** — `log`, `counter`, named counters surfaced in the UI.
+
+The UI may not expose every knob in v1, but nothing is excluded by design.
+
 ### Non-goals (for v1)
 
-- Not a full router OS — no DHCP, DNS, VPN _server_, or captive portal. (NAT/forwarding rules **are** in scope; nftables does that natively and we'll surface it.)
+- Not a full router OS — Zeerak does not _run_ DHCP, DNS, VPN servers, or captive portals (those are application daemons like `dnsmasq`, `kea`, `wireguard`, `coova-chilli`). Zeerak happily firewalls and NATs _for_ them, and detects them as integrations (§6), but it does not bundle them.
 - Not a heavyweight fleet orchestrator — cluster mode (§4) is intentionally simple master/agent config distribution, not a SaaS control plane.
 - Not iptables-compatible — nftables only.
 
 ---
-
-## 2. Target Users & Use Cases
-
-| Persona              | Use case                                                                      |
-| -------------------- | ----------------------------------------------------------------------------- |
-| Solo dev with a VPS  | Expose Caddy on 80/443, SSH only from home IP, drop everything else.          |
-| Homelab tinkerer     | Segment LAN/IoT/guest, block outbound from IoT, allow Jellyfin from LAN only. |
-| Small team / startup | GitOps-friendly firewall config on app servers, no surprise lockouts.         |
-| Learner              | See the UI choice → see the generated `nft` rule. Learn nftables by doing.    |
 
 ### Concrete v1 scenarios
 
@@ -55,6 +59,8 @@ Zeerak is **open source from day one** under **Apache-2.0**, developed in public
 - **"Country block"**: drop traffic from a list of CIDRs (ipset-backed, auto-updated).
 - **"Rate-limit SSH"**: 5 attempts/min/IP, drop excess.
 - **"Locked-down egress"**: outbound default-deny with an allowlist (DNS, NTP, HTTPS, package mirrors) — catches malware phone-home and accidental data exfil.
+- **"Home router box"**: SNAT/masquerade on the WAN interface, DNAT `:443` and `:80` to an internal Caddy host, hairpin NAT for LAN clients hitting the public IP.
+- **"Split-tunnel marks"**: tag traffic to specific destinations with `meta mark` so a sibling routing table sends it over WireGuard while the rest goes out the default gateway.
 
 ---
 
@@ -241,16 +247,19 @@ The assistant proposes; the human commits. Always.
 - [ ] **Cluster mode v1**: master/agent over SSH (mTLS opt-in fallback), pull sync, fleet status view
 - [ ] Cluster test-kit scenarios (partition, rollback-on-disconnect, drift)
 - [ ] **MCP server v1** — staging tools (`propose_change`, `apply_preset`), opt-in commit, sandbox mode
-- [x] Caddy admin-API panel *(read-only: detect + bound-ports cross-check; write flow deferred to v0.4)*
-- [x] Docker chain awareness *(detection + dashboard pill; DOCKER-USER hand-off deferred)*
-- [x] OpenAPI spec *(shipped at `/openapi.yaml`; generated client TBD)*
+- [x] Caddy admin-API panel _(read-only: detect + bound-ports cross-check; write flow deferred to v0.4)_
+- [x] Docker chain awareness _(detection + dashboard pill; DOCKER-USER hand-off deferred)_
+- [x] OpenAPI spec _(shipped at `/openapi.yaml`; generated client TBD)_
 - [x] Named sets/maps editor (CIDR lists, country blocks)
-- [x] Rate-limiting / connection-tracking rule helpers *(SSH `rate_limit.per_minute`)*
-- [x] Tailscale + WireGuard awareness *(detect + SSH `interfaces:` pinning)*
-- [x] OIDC / `forward_auth` *(Caddyfile.example + docs/auth.md)*
+- [x] Rate-limiting / connection-tracking rule helpers _(SSH `rate_limit.per_minute`)_
+- [x] Tailscale + WireGuard awareness _(detect + SSH `interfaces:` pinning)_
+- [x] OIDC / `forward_auth` _(Caddyfile.example + docs/auth.md)_
 
 ### Later
 
+- [ ] **NAT & port-forward UI** — SNAT/DNAT/masquerade/redirect with hairpin presets ("home router box")
+- [ ] **Policy routing marks** — `meta mark` / `ct mark` editor with split-tunnel and QoS presets
+- [ ] **Conntrack helpers & zones** — surface `ct helper`, zones, custom timeouts
 - [ ] IPv6 parity audit
 - [ ] Cluster: push sync, drift auto-heal, group templates
 - [ ] microVM-based test kit on self-hosted CI
