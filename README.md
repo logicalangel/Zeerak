@@ -136,7 +136,21 @@ zeerak rollback
 
 `--addr` (or env `ZEERAK_ADDR`) overrides the daemon address — use a unix socket path or an `http://host:port` URL.
 
-### 5. Talk to it from your AI assistant (optional)
+### 5. Open the web panel (optional)
+
+The daemon also serves a minimal web panel on the same port:
+
+```
+http://127.0.0.1:7878/
+```
+
+- **`/`** — dashboard with current status, pending-change banner, and Confirm / Rollback buttons.
+- **`/presets`** — preset wizard: pick `default_deny_inbound`, `caddy_box`, or an SSH allowlist; see a full unified diff vs the live ruleset before staging.
+- **`/ruleset`** — read-only view of `nft list ruleset`.
+
+The panel never bypasses the safety bar: every change goes through the same stage → confirm-or-auto-rollback flow as the CLI and API. (HTMX + Svelte islands + shadcn-svelte and the rule-by-rule designer arrive in v0.3.)
+
+### 6. Talk to it from your AI assistant (optional)
 
 Wire `zeerak-mcp` into any MCP-aware client. Example Claude Desktop entry (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 

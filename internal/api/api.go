@@ -52,14 +52,31 @@ type Server struct {
 	reader  Reader
 	logger  *slog.Logger
 	version string
+
+	// extraRoutes lets callers (e.g. the web panel) register additional
+	// handlers on the same mux. Optional; nil is fine.
+	extraRoutes func(*http.ServeMux)
+}
+
+// Option configures a Server.
+type Option func(*Server)
+
+// WithExtraRoutes registers additional routes on the mux returned by
+// Handler(). Used by cmd/zeerak-server to mount the v0.2.5 web panel.
+func WithExtraRoutes(register func(*http.ServeMux)) Option {
+	return func(s *Server) { s.extraRoutes = register }
 }
 
 // New returns a Server backed by stg + reader.
-func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string) *Server {
+func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string, opts ...Option) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Server{stg: stg, reader: reader, logger: logger, version: version}
+	s := &Server{stg: stg, reader: reader, logger: logger, version: version}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Handler returns the http.Handler exposing all API routes.
@@ -73,6 +90,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /stage", s.handleStage)
 	mux.HandleFunc("POST /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /rollback", s.handleRollback)
+	if s.extraRoutes != nil {
+		s.extraRoutes(mux)
+	}
 	return mux
 }
 

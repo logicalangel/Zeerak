@@ -24,6 +24,7 @@ import (
 	"github.com/zeerak/zeerak/internal/config"
 	"github.com/zeerak/zeerak/internal/nft"
 	"github.com/zeerak/zeerak/internal/stager"
+	"github.com/zeerak/zeerak/internal/ui"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
@@ -94,7 +95,11 @@ func run(ctx context.Context, logger *slog.Logger, agentMode bool, configPath, l
 	}
 	logger.Info("boot apply ok", "tables", len(cfg.Tables))
 
-	apiSrv := api.New(stg, adapter, logger, Version)
+	uiHandler, err := ui.New(stg, adapter, logger, Version)
+	if err != nil {
+		return fmt.Errorf("init ui: %w", err)
+	}
+	apiSrv := api.New(stg, adapter, logger, Version, api.WithExtraRoutes(uiHandler.Register))
 	if err := apiSrv.Serve(ctx, listen, socketPath); err != nil {
 		return fmt.Errorf("api: %w", err)
 	}

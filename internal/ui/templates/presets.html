@@ -1,0 +1,55 @@
+{{define "presets.html"}}{{template "base.html" .}}{{end}}
+
+{{define "body"}}
+{{$f := .Page.Form}}
+<section class="card">
+  <header class="card-header">
+    <h1>Preset wizard</h1>
+    <span class="badge badge-muted">v0.2.5</span>
+  </header>
+  <div class="card-body">
+    <p class="muted">Pick presets, preview the rendered <code>nft</code> diff, then stage with the auto-rollback timer. v0.3 will replace this with a full rule designer (shadcn-svelte islands).</p>
+
+    <form method="post" action="/ui/presets/preview" class="form">
+      <fieldset class="fieldset">
+        <legend>Default policy</legend>
+        <label class="check">
+          <input type="checkbox" name="default_deny_inbound" {{if $f.DefaultDenyInbound}}checked{{end}}>
+          <span>Default-deny inbound (drop policy + allow loopback + allow established/related)</span>
+        </label>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>SSH</legend>
+        <label class="check">
+          <input type="checkbox" name="ssh_enabled" {{if $f.SSHEnabled}}checked{{end}}>
+          <span>Open SSH</span>
+        </label>
+        <div class="form-row">
+          <label>
+            <span>Port</span>
+            <input class="input" type="number" name="ssh_port" min="1" max="65535" value="{{if $f.SSHPort}}{{$f.SSHPort}}{{else}}22{{end}}">
+          </label>
+          <label class="grow">
+            <span>From CIDRs (one per line; blank = any)</span>
+            <textarea class="input" name="ssh_from" rows="3" placeholder="198.51.100.0/24&#10;2001:db8::/32">{{$f.SSHFrom}}</textarea>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>Web</legend>
+        <label class="check">
+          <input type="checkbox" name="caddy_box" {{if $f.CaddyBox}}checked{{end}}>
+          <span>Caddy box (allow inbound TCP 80 + 443)</span>
+        </label>
+      </fieldset>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Preview diff</button>
+        <a class="btn btn-ghost" href="/">Cancel</a>
+      </div>
+    </form>
+  </div>
+</section>
+{{end}}

@@ -375,6 +375,7 @@ The assistant proposes; the human commits. Always.
 - [x] CLI (`zeerak apply -f config.yaml`) — GitOps-friendly
 - [ ] Public packages: `.deb` PPA, Fedora COPR, AUR, Homebrew tap, GHCR image
 - [x] **MCP server v0** — read-only resources + `explain_rule` / `simulate_packet`, stdio + HTTP transports
+- [x] **Web panel v0.2.5** — server-rendered dashboard, live ruleset, preset wizard with diff preview (HTMX + Svelte islands + shadcn-svelte deferred to v0.3 alongside the rule designer)
 
 > **Deferred to v0.3+:** Caddy admin-API panel, Docker chain awareness,
 > OpenAPI spec + generated client, MCP SSE/streaming transport. Tracked

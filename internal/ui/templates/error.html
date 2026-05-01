@@ -1,0 +1,11 @@
+{{define "error.html"}}{{template "base.html" .}}{{end}}
+
+{{define "body"}}
+<section class="card">
+  <header class="card-header"><h1>Error</h1></header>
+  <div class="card-body">
+    <p>Something went wrong. See the daemon log for details.</p>
+    <p><a class="btn btn-ghost" href="/">Back to dashboard</a></p>
+  </div>
+</section>
+{{end}}

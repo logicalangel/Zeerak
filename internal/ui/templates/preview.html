@@ -1,0 +1,43 @@
+{{define "preview.html"}}{{template "base.html" .}}{{end}}
+
+{{define "body"}}
+{{$p := .Page}}
+{{$f := $p.Form}}
+<section class="card">
+  <header class="card-header">
+    <h1>Preview</h1>
+    <span class="badge badge-warn">not staged yet</span>
+  </header>
+  <div class="card-body">
+    <p class="muted">The diff below shows what will change in the kernel ruleset if you stage. Staging arms the auto-rollback timer; you must confirm within the window.</p>
+
+    <h3>Diff vs live</h3>
+    {{if $p.Diff}}
+      <pre class="pre diff">{{range (splitLines $p.Diff)}}<span class="{{diffLineClass .}}">{{.}}</span>
+{{end}}</pre>
+    {{else}}
+      <p class="muted">No changes — candidate matches what's live.</p>
+    {{end}}
+
+    <details class="details">
+      <summary>Rendered nft (full)</summary>
+      <pre class="pre">{{$p.Rendered}}</pre>
+    </details>
+
+    <details class="details">
+      <summary>Generated zeerak.yaml</summary>
+      <pre class="pre">{{$p.YAML}}</pre>
+    </details>
+
+    <form method="post" action="/ui/presets/stage" class="form-actions">
+      <input type="hidden" name="default_deny_inbound" value="{{if $f.DefaultDenyInbound}}on{{end}}">
+      <input type="hidden" name="ssh_enabled"          value="{{if $f.SSHEnabled}}on{{end}}">
+      <input type="hidden" name="ssh_port"             value="{{$f.SSHPort}}">
+      <input type="hidden" name="ssh_from"             value="{{$f.SSHFrom}}">
+      <input type="hidden" name="caddy_box"            value="{{if $f.CaddyBox}}on{{end}}">
+      <button class="btn btn-primary" type="submit">Stage with auto-rollback</button>
+      <a class="btn btn-ghost" href="/presets">Back to wizard</a>
+    </form>
+  </div>
+</section>
+{{end}}

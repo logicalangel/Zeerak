@@ -1,0 +1,20 @@
+{{define "ruleset.html"}}{{template "base.html" .}}{{end}}
+
+{{define "body"}}
+<section class="card">
+  <header class="card-header">
+    <h1>Live ruleset</h1>
+    <span class="badge badge-muted">read-only</span>
+  </header>
+  <div class="card-body">
+    <p class="muted">Output of <code>nft list ruleset</code> on this host. Includes Zeerak-owned tables and any unowned tables (Docker, fail2ban, hand-written rules).</p>
+    {{with .Page}}
+      {{if .Text}}
+        <pre class="pre">{{.Text}}</pre>
+      {{else}}
+        <p class="muted">Empty ruleset.</p>
+      {{end}}
+    {{end}}
+  </div>
+</section>
+{{end}}

@@ -1,0 +1,37 @@
+{{define "dashboard.html"}}{{template "base.html" .}}{{end}}
+
+{{define "body"}}
+<section class="card">
+  <header class="card-header">
+    <h1>Status</h1>
+    <span class="badge badge-{{if .Status.Pending}}warn{{else if eq .Status.State "Confirmed"}}ok{{else}}muted{{end}}">{{.Status.State}}</span>
+  </header>
+  <div class="card-body">
+    {{if .Status.Pending}}
+      <p>A change is staged. It will roll back automatically in <strong>{{untilSeconds .Status.Deadline}}s</strong> unless confirmed.</p>
+      <form method="post" action="/ui/confirm" class="inline-form">
+        <button class="btn btn-primary" type="submit">Confirm — keep changes</button>
+      </form>
+      <form method="post" action="/ui/rollback" class="inline-form">
+        <button class="btn btn-danger" type="submit">Rollback now</button>
+      </form>
+    {{else}}
+      <p class="muted">No pending change. The currently running ruleset is the last confirmed one.</p>
+    {{end}}
+  </div>
+</section>
+
+<section class="card">
+  <header class="card-header"><h2>Quick actions</h2></header>
+  <div class="card-body grid-2">
+    <a class="tile" href="/presets">
+      <h3>Apply a preset</h3>
+      <p class="muted">SSH allowlist, default-deny, Caddy box. Diff-preview before staging.</p>
+    </a>
+    <a class="tile" href="/ruleset">
+      <h3>View live ruleset</h3>
+      <p class="muted">Read-only view of <code>nft list ruleset</code>.</p>
+    </a>
+  </div>
+</section>
+{{end}}
