@@ -24,7 +24,7 @@ Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux ho
 6. **Opinionated presets** — "allow SSH from my IP", "expose Caddy on 80/443", "block country X", "only Tailscale" — one click.
 7. **Great DX** — clear API, OpenAPI spec, declarative config (so it can live in git), `zeerak` CLI mirrors the UI.
 8. **Boring tech** — Go + server-rendered HTML (HTMX) + a sprinkle of Svelte for interactivity. No SPA build hell.
-9. **Open source, easy to install** — 100% open-source on GitHub, developed in the open. Distributed through standard public channels: GitHub Releases, Docker Hub / GHCR, and major distro repositories (Debian/Ubuntu APT, Fedora COPR, Arch AUR, Alpine, Homebrew). A single `apt install zeerak` / `dnf install zeerak` / `brew install zeerak` should _just work_ — no curl-pipe-bash required.
+9. **Open source, easy to install** — 100% open-source on GitHub, developed in the open. Distributed through standard public channels: GitHub Releases, GHCR, and major distro repositories (Debian/Ubuntu APT, Fedora COPR, Arch AUR, Alpine, Homebrew). A single `apt install zeerak` / `dnf install zeerak` / `brew install zeerak` should _just work_ — no curl-pipe-bash required.
 
 ### Open source
 
@@ -42,9 +42,9 @@ The goal is that any Linux user can get Zeerak with a single command from the pa
 | Alpine           | `apk add zeerak`                                                         |
 | openSUSE         | `zypper install zeerak` (OBS)                                            |
 | macOS (CLI only) | `brew install zeerak`                                                    |
-| Containers       | `docker pull ghcr.io/zeerak/zeerak`                                      |
-| Source           | `go install github.com/zeerak/zeerak/cmd/zeerak-server@latest`           |
-| Manual           | static binaries on every GitHub Release (signed with cosign + checksums) |
+| Containers       | `docker pull ghcr.io/logicalangel/zeerak`                                |
+| Source           | `go install github.com/logicalangel/Zeerak/cmd/zeerak-server@latest`     |
+| Manual           | static binaries on every GitHub Release (SHA256SUMS + CycloneDX SBOMs; cosign signing planned for v0.3) |
 
 Releases are reproducible, signed, and accompanied by an SBOM. No proprietary build steps, no closed binaries.
 
@@ -115,7 +115,7 @@ Releases are reproducible, signed, and accompanied by an SBOM. No proprietary bu
 - **No user database**: Zeerak listens on `127.0.0.1` or a unix socket by default. Auth (TLS, SSO, basic auth, IP allowlist) is the reverse proxy's job — exactly the pattern Caddy itself uses for its admin API on `:2019`.
 - **No audit table**: every config change is logged to `journald` (who/what/when from the proxy + the diff), and history is whatever `git log /etc/zeerak/` tells you. `journalctl -u zeerak` is your audit trail.
 - **nftables interface**: prefer [`google/nftables`](https://github.com/google/nftables) (netlink) for reads & atomic transactions; shell out to `nft -f -` as a fallback for human-readable apply.
-- **API**: small REST surface on `net/http` (Go 1.22+ method routing — no router dep). OpenAPI 3.1 spec generated from code in v0.2.
+- **API**: small REST surface on `net/http` (Go 1.22+ method routing — no router dep). OpenAPI 3.1 spec generated from code (v0.3).
 - **CLI**: `zeerak` binary speaks the same API over the unix socket — handy for scripts & GitOps.
 
 ### Repo layout (initial sketch)

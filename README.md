@@ -17,7 +17,7 @@ A full router OS. Use OPNsense/pfSense for that. Zeerak is for the single-VPS / 
 
 - `zeerak-server` daemon — single static Go binary
 - HTTP control plane on loopback + unix socket: `/healthz` `/version` `/status` `/ruleset/live` `/preview` `/stage` `/confirm` `/rollback`
-- Stage → confirm flow with **auto-rollback timer** (default 30 s)
+- Stage → confirm flow with **auto-rollback timer** (default 60 s)
 - Live ruleset read + unified-diff preview (`POST /preview`) before any change touches the kernel
 - Presets: "Caddy box", "SSH from my IP" (v4/v6 allowlist), "default deny inbound"
 - Hardened `systemd` unit (CAP_NET_ADMIN-only) + example `Caddyfile` reverse-proxy config in [`deploy/`](deploy/)
@@ -118,7 +118,7 @@ version: 1
 server:
   listen: "127.0.0.1:7878"
   socket: "/run/zeerak/zeerak.sock"
-  rollback_seconds: 30
+  rollback_seconds: 60
 presets:
   default_deny_inbound: true
   ssh:
@@ -235,7 +235,7 @@ curl --unix-socket $SOCK -H 'Content-Type: application/x-yaml' \
 
 Go 1.26 · `net/http` (Go 1.22 method routing, no router dep) · `log/slog` · `gopkg.in/yaml.v3` · `nft(8)` shell-out for ruleset apply/read (per VISION §11)
 
-Web UI (v0.2): HTMX + Svelte islands + Tailwind + shadcn-svelte.
+Web UI today: server-rendered Go `html/template`, no JS build step. HTMX + Svelte islands + Tailwind + shadcn-svelte arrive in v0.3 with the rule-by-rule designer.
 
 No database. The running config is a single YAML file (hand-edit `/etc/zeerak/zeerak.yaml`, or let the UI manage `/var/lib/zeerak/autosave.yaml`) — Caddy-style. Audit lives in `journald`, history lives in `git`.
 
