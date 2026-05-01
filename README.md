@@ -3,7 +3,7 @@
 > A lightweight, friendly **web GUI firewall for nftables**.
 > Single binary. Safe by default. Plays nicely with Caddy.
 
-**Status:** v0.1 feature-complete on `main`. v0.2 in progress — `zeerak` CLI and `zeerak-mcp` (Model Context Protocol) server are landed; Linux distro packages next. See [VISION.md](VISION.md) for the full plan.
+**Status:** v0.1 feature-complete on `main`. v0.2 in progress — `zeerak` CLI, `zeerak-mcp` (Model Context Protocol) server, web panel + preset wizard, and public packaging (deb/rpm/apk/AUR/Homebrew/GHCR) are landed. See [VISION.md](VISION.md) for the full plan.
 
 ## What it is
 
@@ -52,7 +52,43 @@ zeerak-mcp --http 127.0.0.1:7879
 
 It's strictly read-only in v0; staging tools land in v0.3.
 
-## Getting started
+## Install
+
+Pre-built packages ship for every `v*` tag — pick the one that matches your distro:
+
+```sh
+# Debian / Ubuntu (PPA)
+sudo add-apt-repository ppa:logicalangel/zeerak
+sudo apt update && sudo apt install zeerak
+
+# Fedora / RHEL (COPR)
+sudo dnf copr enable logicalangel/zeerak
+sudo dnf install zeerak
+
+# Arch (AUR)
+yay -S zeerak-bin            # or: paru -S zeerak-bin
+
+# Alpine — grab the .apk from GitHub Releases
+sudo apk add --allow-untrusted zeerak_<ver>_linux_amd64.apk
+
+# Homebrew (macOS or Linuxbrew, CLI only on macOS)
+brew install logicalangel/zeerak/zeerak
+
+# Container (multi-arch)
+docker pull ghcr.io/logicalangel/zeerak:latest
+```
+
+After install on a systemd distro:
+
+```sh
+sudo systemctl enable --now zeerak-server
+zeerak status
+xdg-open http://127.0.0.1:7878/
+```
+
+The PPA, COPR, and AUR repos are first-party but operator-uploaded per release — see [`deploy/PACKAGING.md`](deploy/PACKAGING.md). The deb / rpm / apk / GHCR image / Homebrew formula publish automatically from the [release workflow](.github/workflows/release.yml).
+
+## Getting started (from source)
 
 > Zeerak is a Linux-only daemon (it shells out to `nft(8)`). On macOS / Windows, use the bundled Docker setup — see [Try it in Docker](#try-it-in-docker).
 
@@ -64,8 +100,6 @@ cd Zeerak
 go build -o out/ ./cmd/...
 # produces out/zeerak-server, out/zeerak, out/zeerak-mcp
 ```
-
-Pre-built distro packages (`apt`, `dnf`, `brew`, AUR, GHCR image) are coming in v0.2 — see the roadmap.
 
 ### 2. Configure
 

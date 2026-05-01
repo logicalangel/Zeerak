@@ -373,7 +373,13 @@ The assistant proposes; the human commits. Always.
 ### v0.2 — CLI, packaging, MCP
 
 - [x] CLI (`zeerak apply -f config.yaml`) — GitOps-friendly
-- [ ] Public packages: `.deb` PPA, Fedora COPR, AUR, Homebrew tap, GHCR image
+- [x] Public packages: `.deb` PPA, Fedora COPR, AUR, Homebrew tap, GHCR image
+  - [x] GoReleaser pipeline → multi-arch `.deb` / `.rpm` / `.apk` + tarballs + SBOMs
+  - [x] GHCR multi-arch image `ghcr.io/logicalangel/zeerak`
+  - [x] Homebrew tap `logicalangel/homebrew-zeerak`
+  - [x] AUR binary package `zeerak-bin` (`deploy/aur/`)
+  - [x] Fedora COPR spec (`deploy/copr/zeerak.spec`)
+  - [x] Launchpad PPA scaffold (`deploy/ppa/debian/`) — uploaded by maintainer per release
 - [x] **MCP server v0** — read-only resources + `explain_rule` / `simulate_packet`, stdio + HTTP transports
 - [x] **Web panel v0.2.5** — server-rendered dashboard, live ruleset, preset wizard with diff preview (HTMX + Svelte islands + shadcn-svelte deferred to v0.3 alongside the rule designer)
 

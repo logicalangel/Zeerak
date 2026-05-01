@@ -1,0 +1,3 @@
+deploy/systemd/zeerak-server.service lib/systemd/system
+deploy/examples/zeerak.yaml          etc/zeerak
+deploy/caddy/Caddyfile.example       usr/share/doc/zeerak

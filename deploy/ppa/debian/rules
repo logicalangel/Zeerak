@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# debian/rules for the Launchpad PPA build.
+# Goreleaser produces the Tier 1 .deb directly; this file exists so that
+# the Ubuntu PPA can build a *source package* from the upstream tarball
+# (Launchpad rebuilds source on its own infrastructure).
+export DH_VERBOSE = 1
+export DH_GOLANG_INSTALL_ALL := 1
+
+# Static binary, version stamped from debian/changelog at build time.
+VERSION := $(shell dpkg-parsechangelog -SVersion | sed 's/-[^-]*$$//')
+
+%:
+	dh $@ --buildsystem=golang --with=golang
+
+override_dh_auto_build:
+	CGO_ENABLED=0 go build -trimpath \
+	    -ldflags="-s -w -X main.Version=$(VERSION)" \
+	    -o debian/zeerak/usr/bin/zeerak-server ./cmd/zeerak-server
+	CGO_ENABLED=0 go build -trimpath \
+	    -ldflags="-s -w -X main.Version=$(VERSION)" \
+	    -o debian/zeerak/usr/bin/zeerak ./cmd/zeerak
+	CGO_ENABLED=0 go build -trimpath \
+	    -ldflags="-s -w -X main.Version=$(VERSION)" \
+	    -o debian/zeerak/usr/bin/zeerak-mcp ./cmd/zeerak-mcp
+
+override_dh_auto_install:
+	# Files are placed by the build override above + dh_install.
+	true
+
+override_dh_auto_test:
+	# Tests run upstream in CI; skip in the PPA build to keep it fast.
+	true

@@ -1,0 +1,28 @@
+post_install() {
+    if ! getent group zeerak >/dev/null; then
+        groupadd --system zeerak
+    fi
+    if ! getent passwd zeerak >/dev/null; then
+        useradd --system --gid zeerak \
+            --home-dir /var/lib/zeerak --shell /usr/bin/nologin \
+            --comment "Zeerak nftables panel" zeerak
+    fi
+    install -d -m 0750 -o root -g zeerak /etc/zeerak /var/lib/zeerak
+
+    cat <<EOF
+
+==> Zeerak installed. Review /etc/zeerak/zeerak.yaml, then:
+==>     sudo systemctl enable --now zeerak-server
+==> Web panel: http://127.0.0.1:7878/
+EOF
+}
+
+post_upgrade() {
+    post_install
+    systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
+pre_remove() {
+    systemctl stop zeerak-server.service >/dev/null 2>&1 || true
+    systemctl disable zeerak-server.service >/dev/null 2>&1 || true
+}

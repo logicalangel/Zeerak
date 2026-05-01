@@ -1,0 +1,281 @@
+# GoReleaser config for Zeerak.
+# https://goreleaser.com/customization/
+#
+# Builds release artifacts for v0.2 packaging:
+#   - tar.gz / zip archives (linux + darwin, amd64 + arm64)
+#   - .deb / .rpm / .apk packages via nfpm  (Debian/Ubuntu, Fedora, Alpine)
+#   - multi-arch OCI image pushed to ghcr.io/logicalangel/zeerak
+#   - Homebrew formula pushed to logicalangel/homebrew-zeerak
+#   - SHA256SUMS + cosign-keyless signatures + SBOMs
+#
+# Run locally without publishing:
+#   goreleaser release --snapshot --clean --skip=publish,sign
+#
+# Real release (in CI on a `v*` tag):
+#   goreleaser release --clean
+
+version: 2
+
+project_name: zeerak
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: zeerak-server
+    main: ./cmd/zeerak-server
+    binary: zeerak-server
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+
+  - id: zeerak
+    main: ./cmd/zeerak
+    binary: zeerak
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+
+  - id: zeerak-mcp
+    main: ./cmd/zeerak-mcp
+    binary: zeerak-mcp
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+
+archives:
+  - id: default
+    ids: [zeerak-server, zeerak, zeerak-mcp]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - VISION.md
+      - deploy/systemd/*
+      - deploy/caddy/*
+      - deploy/examples/*
+
+checksum:
+  name_template: "SHA256SUMS"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "Merge pull request"
+
+# nfpm: native packages for the Tier 1 distros (VISION §11 Q9).
+nfpms:
+  - id: zeerak
+    package_name: zeerak
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: logicalangel
+    homepage: https://github.com/logicalangel/Zeerak
+    maintainer: Zeerak maintainers <noreply@github.com>
+    description: |-
+      Zeerak — lightweight web GUI for nftables.
+      Single-binary daemon, server-rendered web panel, MCP server,
+      and a CLI sharing the same auto-rollback safety bar.
+    license: Apache-2.0
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    section: net
+    priority: optional
+    dependencies:
+      - nftables
+    suggests:
+      - caddy
+    contents:
+      - src: deploy/systemd/zeerak-server.service
+        dst: /lib/systemd/system/zeerak-server.service
+        file_info:
+          mode: 0644
+      - src: deploy/examples/zeerak.yaml
+        dst: /etc/zeerak/zeerak.yaml
+        type: config|noreplace
+        file_info:
+          mode: 0640
+      - src: deploy/caddy/Caddyfile.example
+        dst: /usr/share/doc/zeerak/Caddyfile.example
+        file_info:
+          mode: 0644
+      - src: LICENSE
+        dst: /usr/share/doc/zeerak/LICENSE
+        file_info:
+          mode: 0644
+      - src: NOTICE
+        dst: /usr/share/doc/zeerak/NOTICE
+        file_info:
+          mode: 0644
+    scripts:
+      preinstall: deploy/packaging/preinstall.sh
+      postinstall: deploy/packaging/postinstall.sh
+      preremove: deploy/packaging/preremove.sh
+    overrides:
+      apk:
+        dependencies:
+          - nftables
+        scripts:
+          # Alpine uses OpenRC, not systemd; the systemd unit is shipped
+          # for documentation but the post-install hook is a no-op there.
+          postinstall: deploy/packaging/postinstall-apk.sh
+    rpm:
+      group: System Environment/Daemons
+      signature:
+        key_file: "{{ if index .Env \"NFPM_RPM_KEY_FILE\" }}{{ .Env.NFPM_RPM_KEY_FILE }}{{ end }}"
+    deb:
+      signature:
+        key_file: "{{ if index .Env \"NFPM_DEB_KEY_FILE\" }}{{ .Env.NFPM_DEB_KEY_FILE }}{{ end }}"
+
+# Multi-arch OCI image. The Dockerfile already builds from source; for the
+# release we push pre-built binaries into a thin Alpine image instead.
+dockers:
+  - image_templates:
+      - "ghcr.io/logicalangel/zeerak:{{ .Version }}-amd64"
+      - "ghcr.io/logicalangel/zeerak:latest-amd64"
+    use: buildx
+    goos: linux
+    goarch: amd64
+    ids: [zeerak-server, zeerak, zeerak-mcp]
+    dockerfile: deploy/docker/Dockerfile.release
+    extra_files:
+      - deploy/examples/zeerak.yaml
+      - LICENSE
+      - NOTICE
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Zeerak — lightweight web GUI for nftables"
+      - "--label=org.opencontainers.image.url=https://github.com/logicalangel/Zeerak"
+      - "--label=org.opencontainers.image.source=https://github.com/logicalangel/Zeerak"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+  - image_templates:
+      - "ghcr.io/logicalangel/zeerak:{{ .Version }}-arm64"
+      - "ghcr.io/logicalangel/zeerak:latest-arm64"
+    use: buildx
+    goos: linux
+    goarch: arm64
+    ids: [zeerak-server, zeerak, zeerak-mcp]
+    dockerfile: deploy/docker/Dockerfile.release
+    extra_files:
+      - deploy/examples/zeerak.yaml
+      - LICENSE
+      - NOTICE
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Zeerak — lightweight web GUI for nftables"
+      - "--label=org.opencontainers.image.url=https://github.com/logicalangel/Zeerak"
+      - "--label=org.opencontainers.image.source=https://github.com/logicalangel/Zeerak"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "ghcr.io/logicalangel/zeerak:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/logicalangel/zeerak:{{ .Version }}-amd64"
+      - "ghcr.io/logicalangel/zeerak:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/logicalangel/zeerak:latest"
+    image_templates:
+      - "ghcr.io/logicalangel/zeerak:latest-amd64"
+      - "ghcr.io/logicalangel/zeerak:latest-arm64"
+
+# Homebrew tap. Goreleaser pushes the formula to logicalangel/homebrew-zeerak
+# whenever a non-prerelease tag is published.
+brews:
+  - name: zeerak
+    ids: [default]
+    repository:
+      owner: logicalangel
+      name: homebrew-zeerak
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/logicalangel/Zeerak
+    description: "Lightweight web GUI for nftables (Linux). The CLI works on macOS for talking to a remote zeerak-server."
+    license: Apache-2.0
+    skip_upload: auto
+    test: |
+      system "#{bin}/zeerak --version"
+    install: |
+      bin.install "zeerak"
+      # zeerak-server is Linux-only; Homebrew on macOS gets the CLI + MCP.
+      if OS.linux?
+        bin.install "zeerak-server"
+      end
+      bin.install "zeerak-mcp"
+      pkgshare.install "deploy/examples/zeerak.yaml"
+      pkgshare.install "deploy/caddy/Caddyfile.example"
+
+# SBOMs (CycloneDX) for every archive. Cheap supply-chain hygiene.
+sboms:
+  - artifacts: archive
+
+release:
+  github:
+    owner: logicalangel
+    name: Zeerak
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    Zeerak {{ .Tag }}
+
+    Single-binary nftables panel. See VISION.md and the README for install
+    options across .deb / .rpm / .apk / Homebrew / GHCR.
+  footer: |
+    ---
+    Verify checksums:
+
+    ```sh
+    sha256sum -c SHA256SUMS
+    ```
+
+    Containers:
+
+    ```sh
+    docker pull ghcr.io/logicalangel/zeerak:{{ .Version }}
+    ```

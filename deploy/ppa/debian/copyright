@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: zeerak
+Upstream-Contact: logicalangel <noreply@github.com>
+Source: https://github.com/logicalangel/Zeerak
+
+Files: *
+Copyright: 2025-2026 logicalangel
+License: Apache-2.0
+ On Debian systems the full text of the Apache License 2.0 is available
+ in /usr/share/common-licenses/Apache-2.0.

@@ -1,0 +1,26 @@
+# Goreleaser release image. Unlike the top-level Dockerfile (which builds
+# from source for local `docker compose up`), this one ingests the binaries
+# goreleaser already built and ships them in a thin Alpine image.
+#
+# Tags: ghcr.io/logicalangel/zeerak:<version>, :latest
+FROM alpine:3.20
+
+RUN apk add --no-cache nftables iproute2 ca-certificates tini \
+ && mkdir -p /etc/zeerak /var/lib/zeerak /run/zeerak \
+ && addgroup -S zeerak \
+ && adduser -S -D -H -G zeerak -h /var/lib/zeerak -s /sbin/nologin zeerak \
+ && chown -R root:zeerak /etc/zeerak /var/lib/zeerak /run/zeerak \
+ && chmod 0750 /etc/zeerak /var/lib/zeerak /run/zeerak
+
+# Goreleaser drops the binaries next to this Dockerfile in the build context.
+COPY zeerak-server /usr/local/bin/zeerak-server
+COPY zeerak        /usr/local/bin/zeerak
+COPY zeerak-mcp    /usr/local/bin/zeerak-mcp
+COPY deploy/examples/zeerak.yaml /etc/zeerak/zeerak.yaml
+COPY LICENSE NOTICE /usr/share/doc/zeerak/
+
+EXPOSE 7878
+VOLUME ["/etc/zeerak", "/var/lib/zeerak"]
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/zeerak-server"]
+CMD ["--listen", "0.0.0.0:7878", "--config", "/etc/zeerak/zeerak.yaml"]

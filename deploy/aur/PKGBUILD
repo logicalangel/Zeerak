@@ -1,0 +1,58 @@
+# Maintainer: logicalangel <noreply@github.com>
+#
+# AUR binary package. Pulls the published .tar.gz archive from GitHub
+# Releases, drops the binaries into /usr/bin, and installs the systemd unit.
+#
+# Build locally:
+#   makepkg -si
+#
+# To publish to the AUR on a new release:
+#   1. bump pkgver below to the new version (without the leading `v`)
+#   2. update the sha256 sums (run `updpkgsums` in this directory)
+#   3. regenerate .SRCINFO:  makepkg --printsrcinfo > .SRCINFO
+#   4. push to ssh://aur@aur.archlinux.org/zeerak-bin.git
+#
+# A GitHub Action (.github/workflows/aur-publish.yml) automates steps 2–4
+# whenever a `v*` tag is pushed and the release artifacts exist.
+
+pkgname=zeerak-bin
+pkgver=0.2.5
+pkgrel=1
+pkgdesc="Lightweight web GUI firewall for nftables (single static Go binary)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/logicalangel/Zeerak"
+license=('Apache-2.0')
+depends=('nftables')
+optdepends=(
+  'caddy: recommended reverse proxy with TLS'
+)
+provides=('zeerak')
+conflicts=('zeerak')
+backup=('etc/zeerak/zeerak.yaml')
+options=('!strip')
+
+source_x86_64=("${url}/releases/download/v${pkgver}/zeerak_${pkgver}_linux_amd64.tar.gz")
+source_aarch64=("${url}/releases/download/v${pkgver}/zeerak_${pkgver}_linux_arm64.tar.gz")
+
+# Replaced by `updpkgsums` in CI.
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    install -Dm755 zeerak-server "${pkgdir}/usr/bin/zeerak-server"
+    install -Dm755 zeerak        "${pkgdir}/usr/bin/zeerak"
+    install -Dm755 zeerak-mcp    "${pkgdir}/usr/bin/zeerak-mcp"
+
+    install -Dm644 deploy/systemd/zeerak-server.service \
+        "${pkgdir}/usr/lib/systemd/system/zeerak-server.service"
+
+    install -Dm640 deploy/examples/zeerak.yaml \
+        "${pkgdir}/etc/zeerak/zeerak.yaml"
+
+    install -Dm644 deploy/caddy/Caddyfile.example \
+        "${pkgdir}/usr/share/doc/${pkgname}/Caddyfile.example"
+
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 NOTICE  "${pkgdir}/usr/share/licenses/${pkgname}/NOTICE"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
