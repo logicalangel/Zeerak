@@ -33,7 +33,7 @@ Zeerak is **open source from day one** under **Apache-2.0**, developed in public
 ### Non-goals (for v1)
 
 - Not a full router OS — no DHCP, DNS, VPN _server_, or captive portal. (NAT/forwarding rules **are** in scope; nftables does that natively and we'll surface it.)
-- Not a heavyweight fleet orchestrator — cluster mode (§5) is intentionally simple master/agent config distribution, not a SaaS control plane.
+- Not a heavyweight fleet orchestrator — cluster mode (§4) is intentionally simple master/agent config distribution, not a SaaS control plane.
 - Not iptables-compatible — nftables only.
 
 ---
@@ -71,38 +71,7 @@ This is borrowed from Mikrotik's "safe mode" and from `iptables-apply`. It shoul
 
 ---
 
-## 4. Caddy Integration
-
-Two complementary modes:
-
-### A. Caddy in front of Zeerak (recommended deployment)
-
-- Caddy terminates TLS and reverse-proxies to `zeerak-server` on `127.0.0.1:17878`.
-- Zeerak ships an example `Caddyfile`:
-  ```caddyfile
-  zeerak.example.com {
-      reverse_proxy 127.0.0.1:17878
-      # optional: SSO via Authelia / Authentik
-      # forward_auth ...
-  }
-  ```
-- Zeerak's UI never has to deal with TLS itself. Simpler, safer.
-
-### B. Zeerak manages Caddy config
-
-- A "Caddy" panel in the UI lets you:
-  - See current sites, certs, and upstream targets (read from Caddy's admin API at `localhost:2019`).
-  - One-click create matching firewall rules: _"Caddy listens on 80/443 → ensure inbound 80/443 are allowed"_.
-  - Warn if firewall blocks a port Caddy is bound to (very common footgun).
-- Optional: edit Caddyfile through Zeerak with the same stage→preview→commit flow.
-
-Both modes are **opt-in** and decoupled: you can use A without B.
-
-> 💡 We are also borrowing Caddy's _operational_ model, not just integrating with it: **no DB, no user table, config file = source of truth, OS handles auth + logging**.
-
----
-
-## 5. Cluster mode — master/agent config distribution
+## 4. Cluster mode — master/agent config distribution
 
 For users with more than one host (small fleets, edge boxes, multiple VPSes), Zeerak ships a simple **master/agent** model. It is **opt-in**; a stand-alone Zeerak knows nothing about it.
 
@@ -140,7 +109,7 @@ For users with more than one host (small fleets, edge boxes, multiple VPSes), Ze
 
 ---
 
-## 6. Test kit — `zeerak-testkit`
+## 5. Test kit — `zeerak-testkit`
 
 A firewall is only as good as your confidence that it does what you think. `zeerak-testkit` ships in the same repo and is used by both contributors (CI) and operators (pre-prod validation).
 
@@ -183,7 +152,7 @@ A firewall is only as good as your confidence that it does what you think. `zeer
 
 ---
 
-## 7. Other integrations (post-v1, planned)
+## 6. Other integrations (post-v1, planned)
 
 - **Docker**: detect Docker's `DOCKER` and `DOCKER-USER` chains, surface them, let you add rules to `DOCKER-USER` safely.
 - **Tailscale**: detect `tailscale0`, presets like _"admin services only on tailnet"_.
@@ -193,7 +162,7 @@ A firewall is only as good as your confidence that it does what you think. `zeer
 
 ---
 
-## 8. MCP support — `zeerak-mcp`
+## 7. MCP support — `zeerak-mcp`
 
 Zeerak ships a first-class **[Model Context Protocol](https://modelcontextprotocol.io)** server so AI assistants (Claude Desktop, Copilot, Continue, Cursor, custom agents) can read state and — _carefully_ — propose changes. Same safety bar as a human: every mutation goes through stage → preview → commit-with-rollback.
 
@@ -263,7 +232,7 @@ The assistant proposes; the human commits. Always.
 
 ---
 
-## 9. Roadmap
+## 8. Roadmap
 
 **v0.1 + v0.2 — shipped.** Daemon, CLI, MCP read-only server, web panel with preset wizard, packaging (deb/rpm/apk/AUR/Homebrew/GHCR), netns test kit. See [README](README.md) for the user-facing feature list.
 
@@ -289,7 +258,7 @@ The assistant proposes; the human commits. Always.
 
 ---
 
-## 10. Design decisions
+## 9. Design decisions
 
 All v1 design questions are locked. Concise reference; rationale lives in
 git history (`docs: lock all §11 design decisions`) and future ADRs under
@@ -311,7 +280,7 @@ git history (`docs: lock all §11 design decisions`) and future ADRs under
 
 ---
 
-## 11. Inspirations & prior art
+## 10. Inspirations & prior art
 
 - **firewalld** — zone model is nice; XML config is not.
 - **ufw** — simplicity goal; but CLI-only and iptables-era.
@@ -322,6 +291,6 @@ git history (`docs: lock all §11 design decisions`) and future ADRs under
 
 ---
 
-## 12. How to contribute to _this document_
+## 11. How to contribute to _this document_
 
 This file is the living design doc. PRs welcome. If you disagree with a design choice, open an issue with a "Decision proposal" — we'll discuss in the open and record the outcome in `docs/decisions/` (lightweight ADRs).
