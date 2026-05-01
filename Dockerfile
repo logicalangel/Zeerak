@@ -22,11 +22,11 @@ COPY --from=build /out/zeerak-server /usr/local/bin/zeerak-server
 COPY deploy/examples/zeerak.yaml /etc/zeerak/zeerak.yaml
 
 # HTTP API on loopback by default — expose explicitly so `docker run -p` works.
-EXPOSE 7878
+EXPOSE 17878
 VOLUME ["/etc/zeerak", "/var/lib/zeerak"]
 
 # nft writes need CAP_NET_ADMIN; provide that with `--cap-add=NET_ADMIN`.
 # The container also needs its own net namespace (default) so it doesn't
 # stomp on the host firewall.
 ENTRYPOINT ["/usr/local/bin/zeerak-server"]
-CMD ["--listen", "0.0.0.0:7878", "--config", "/etc/zeerak/zeerak.yaml"]
+CMD ["--listen", "0.0.0.0:17878", "--config", "/etc/zeerak/zeerak.yaml"]

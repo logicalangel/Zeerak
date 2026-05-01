@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: Zeerak API
+  version: "0.3"
+  summary: Zeerak nftables firewall control plane
+  description: |
+    Zeerak's HTTP API. Per VISION.md §11 Q2 the daemon does no auth on its own:
+    it binds to loopback and a unix socket. Authentication / authorization
+    belongs to a reverse proxy in front of the daemon (see docs/auth.md).
+
+    All write operations go through the stage → confirm-or-revert flow. The
+    safety bar is uniform across CLI, API, and UI.
+servers:
+  - url: http://127.0.0.1:17878
+    description: default loopback bind
+  - url: http+unix:///run/zeerak.sock
+    description: default unix socket bind
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Always returns 200 with a constant payload. Used by container orchestrators.
+      responses:
+        "200":
+          description: alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /version:
+    get:
+      summary: Build version
+      responses:
+        "200":
+          description: build info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+
+  /status:
+    get:
+      summary: Current stager state + rollback deadline
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+
+  /ruleset/live:
+    get:
+      summary: Read live nftables ruleset (output of `nft list ruleset`)
+      responses:
+        "200":
+          description: live ruleset text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ruleset"
+
+  /preview:
+    post:
+      summary: Render and diff a candidate config without applying
+      description: |
+        Body is a `zeerak.yaml` document. The server compiles it, renders the
+        nft script, captures the live tables it owns, and returns a unified
+        diff. Stateless — does not affect the stager.
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              $ref: "#/components/schemas/Config"
+      responses:
+        "200":
+          description: preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preview"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /stage:
+    post:
+      summary: Apply a candidate config and arm the auto-revert timer
+      description: |
+        Snapshots the current ruleset, applies the candidate, and starts a
+        60-second rollback window. The change MUST be confirmed via `/confirm`
+        within the window or it auto-reverts.
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              $ref: "#/components/schemas/Config"
+      responses:
+        "200":
+          description: staged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stage"
+        "409":
+          description: a change is already pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /confirm:
+    post:
+      summary: Confirm the currently pending change
+      responses:
+        "200":
+          description: confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OK"
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /rollback:
+    post:
+      summary: Rollback the currently pending change
+      responses:
+        "200":
+          description: rolled back
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OK"
+        "409":
+          $ref: "#/components/responses/Error"
+
+components:
+  responses:
+    Error:
+      description: error envelope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Version:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+
+    Status:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [idle, pending, reverted]
+        deadline:
+          type: string
+          format: date-time
+          description: when auto-revert fires (only set when state=pending)
+
+    Ruleset:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    Preview:
+      type: object
+      required: [rendered, live, diff]
+      properties:
+        rendered:
+          type: string
+          description: candidate nft script
+        live:
+          type: string
+          description: live nft script for owned tables
+        diff:
+          type: string
+          description: unified diff (live → candidate)
+
+    Stage:
+      type: object
+      required: [state, deadline]
+      properties:
+        state:
+          type: string
+          enum: [pending]
+        deadline:
+          type: string
+          format: date-time
+
+    OK:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    Config:
+      type: object
+      description: |
+        Top-level zeerak.yaml shape. Only the fields needed by the API are
+        spec'd here — the full preset surface is documented in
+        docs/presets.md.
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        listen:
+          type: string
+          example: "127.0.0.1:17878"
+        socket:
+          type: string
+          example: "/run/zeerak.sock"
+        presets:
+          type: object
+          additionalProperties: true
+          description: see internal/policy package for the full schema

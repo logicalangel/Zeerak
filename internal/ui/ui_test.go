@@ -75,7 +75,7 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("status %d, body=%s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"<title>", "Status", "Apply a preset", "live ruleset"} {
+	for _, want := range []string{"<title>", "Incoming traffic", "Show technical view", "Add or change"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
@@ -96,15 +96,43 @@ func TestRulesetPage(t *testing.T) {
 
 func TestPresetsForm(t *testing.T) {
 	_, mux, _ := newTestHandler(t)
+
+	// /presets is now a picker page that links to per-service editors.
 	rr := do(t, mux, "GET", "/presets", nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status %d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"Preset wizard", "default_deny_inbound", "ssh_enabled", "caddy_box", "Preview diff"} {
+	for _, want := range []string{"Add or change a service", "/edit/ssh", "/edit/web", "/edit/db", "/edit/mail", "/edit/protection"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("presets form missing %q", want)
+			t.Errorf("presets picker missing %q", want)
 		}
+	}
+
+	// The SSH editor renders the audience radios + Review changes button.
+	rr = do(t, mux, "GET", "/edit/ssh", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("edit/ssh status %d", rr.Code)
+	}
+	body = rr.Body.String()
+	for _, want := range []string{"ssh_audience", "Review changes"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit/ssh missing %q", want)
+		}
+	}
+	// Other services should NOT appear as visible inputs on the SSH editor.
+	if strings.Contains(body, `name="web_audience"`) {
+		t.Errorf("edit/ssh should not contain web_audience input")
+	}
+	// But should round-trip the other services as hidden inputs.
+	if !strings.Contains(body, `name="caddy_box"`) {
+		t.Errorf("edit/ssh missing hidden caddy_box round-trip")
+	}
+
+	// Unknown kind → 404.
+	rr = do(t, mux, "GET", "/edit/nope", nil)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("edit/nope status %d, want 404", rr.Code)
 	}
 }
 
@@ -121,7 +149,7 @@ func TestPresetsPreview_RendersDiff(t *testing.T) {
 		t.Fatalf("status %d, body=%s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"Preview", "Diff vs live", "zeerak-presets", "Stage with auto-rollback"} {
+	for _, want := range []string{"Review changes", "service-grid", "zeerak-presets", "Apply with auto-rollback"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("preview missing %q", want)
 		}
@@ -206,5 +234,61 @@ func TestStaticServed(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "--bg") {
 		t.Errorf("style.css not served")
+	}
+}
+
+func TestEditService_NewFieldsRoundTrip(t *testing.T) {
+	// SSH editor must surface the v0.3 advanced inputs.
+	_, mux, _ := newTestHandler(t)
+	rr := do(t, mux, "GET", "/edit/ssh", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("edit/ssh status %d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{
+		`name="ssh_interfaces"`,
+		`name="ssh_rate_limit"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit/ssh missing %q", want)
+		}
+	}
+	// Outbound editor must surface block-set fields.
+	rr = do(t, mux, "GET", "/edit/outbound", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("edit/outbound status %d", rr.Code)
+	}
+	body = rr.Body.String()
+	for _, want := range []string{
+		`name="block_sets_raw"`,
+		`name="out_block_refs"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit/outbound missing %q", want)
+		}
+	}
+	// SSH editor must round-trip outbound block-set fields as hidden inputs.
+	rr = do(t, mux, "GET", "/edit/ssh", nil)
+	body = rr.Body.String()
+	for _, want := range []string{
+		`type="hidden" name="block_sets_raw"`,
+		`type="hidden" name="out_block_refs"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit/ssh missing hidden round-trip %q", want)
+		}
+	}
+}
+
+func TestParseBlockSets(t *testing.T) {
+	got := parseBlockSets("# header\n\ntor 1.2.3.0/24\ntor 5.6.7.0/24\nspam6 2001:db8::/32\n")
+	if len(got) != 2 {
+		t.Fatalf("got %d sets, want 2: %+v", len(got), got)
+	}
+	if got[0].Name != "tor" || got[0].Family != "v4" || len(got[0].CIDRs) != 2 {
+		t.Errorf("tor set wrong: %+v", got[0])
+	}
+	if got[1].Name != "spam6" || got[1].Family != "v6" {
+		t.Errorf("spam6 set wrong: %+v", got[1])
 	}
 }

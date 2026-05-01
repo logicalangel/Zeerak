@@ -83,7 +83,7 @@ After install on a systemd distro:
 ```sh
 sudo systemctl enable --now zeerak-server
 zeerak status
-xdg-open http://127.0.0.1:7878/
+xdg-open http://127.0.0.1:17878/
 ```
 
 The PPA, COPR, and AUR repos are first-party but operator-uploaded per release — see [`deploy/PACKAGING.md`](deploy/PACKAGING.md). The deb / rpm / apk / GHCR image / Homebrew formula publish automatically from the [release workflow](.github/workflows/release.yml).
@@ -116,7 +116,7 @@ Minimal config (default-deny inbound, allow SSH from anywhere, allow Caddy on 80
 ```yaml
 version: 1
 server:
-  listen: "127.0.0.1:7878"
+  listen: "127.0.0.1:17878"
   socket: "/run/zeerak/zeerak.sock"
   rollback_seconds: 60
 presets:
@@ -175,7 +175,7 @@ zeerak rollback
 The daemon also serves a minimal web panel on the same port:
 
 ```
-http://127.0.0.1:7878/
+http://127.0.0.1:17878/
 ```
 
 - **`/`** — dashboard with current status, pending-change banner, and Confirm / Rollback buttons.
@@ -207,7 +207,7 @@ A `Dockerfile` and `docker-compose.yml` ship in the repo for non-Linux hosts and
 
 ```sh
 docker compose up --build -d
-docker exec zeerak wget -qO- http://127.0.0.1:7878/healthz   # → {"status":"ok"}
+docker exec zeerak wget -qO- http://127.0.0.1:17878/healthz   # → {"status":"ok"}
 docker exec zeerak zeerak status
 ```
 

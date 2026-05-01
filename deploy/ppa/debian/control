@@ -3,9 +3,9 @@ Section: net
 Priority: optional
 Maintainer: logicalangel <noreply@github.com>
 Build-Depends: debhelper-compat (= 13),
-               dh-sequence-golang,
-               golang-go (>= 1.26~),
-               git
+dh-sequence-golang,
+golang-go (>= 1.26~),
+git
 Standards-Version: 4.6.2
 Homepage: https://github.com/logicalangel/Zeerak
 Vcs-Browser: https://github.com/logicalangel/Zeerak
@@ -17,7 +17,7 @@ Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, nftables, adduser
 Recommends: caddy
 Description: lightweight web GUI firewall for nftables
- Zeerak is a single-binary, server-rendered web GUI for managing nftables.
- It bundles a daemon (zeerak-server), a CLI (zeerak), and an MCP server
- (zeerak-mcp) for AI assistants. Every change goes through a stage,
- preview, and confirm-or-auto-rollback flow so you can't lock yourself out.
+Zeerak is a single-binary, server-rendered web GUI for managing nftables.
+It bundles a daemon (zeerak-server), a CLI (zeerak), and an MCP server
+(zeerak-mcp) for AI assistants. Every change goes through a stage,
+preview, and confirm-or-auto-rollback flow so you can't lock yourself out.

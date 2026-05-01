@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/zeerak/zeerak/internal/model"
 	"github.com/zeerak/zeerak/internal/stager"
 )
@@ -234,5 +236,32 @@ func TestPreview_InvalidYAML(t *testing.T) {
 	rec := do(t, s.Handler(), "POST", "/preview", "version: 99\n")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want 400", rec.Code)
+	}
+}
+
+func TestOpenAPI(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/openapi.yaml", nil)
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/yaml") {
+		t.Fatalf("content-type=%q", ct)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"openapi: 3.1.0", "/healthz", "/stage", "/confirm", "/rollback", "ErrorBody"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in spec", want)
+		}
+	}
+	// Must be valid YAML.
+	var doc map[string]any
+	if err := yaml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("spec not valid yaml: %v", err)
+	}
+	if doc["openapi"] != "3.1.0" {
+		t.Fatalf("openapi key: %v", doc["openapi"])
 	}
 }

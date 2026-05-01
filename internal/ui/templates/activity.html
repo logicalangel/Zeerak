@@ -1,0 +1,36 @@
+{{define "activity.html"}}{{template "base.html" .}}{{end}} {{define "body"}}
+{{$page := .Page}}
+<section class="page-head">
+  <h1>Activity</h1>
+  <p class="muted">Recent changes to your firewall, in plain English.</p>
+</section>
+
+{{if not $page.HasLog}}
+<div class="empty-state">
+  <p class="muted">Activity logging is not enabled on this host.</p>
+</div>
+{{else if not $page.Events}}
+<div class="empty-state">
+  <p class="muted">
+    Nothing has happened yet. When you stage, confirm, or revert a change, it
+    will show up here.
+  </p>
+</div>
+{{else}}
+<ol class="timeline">
+  {{range $page.Events}}
+  <li class="tl-item tl-{{.Kind}}">
+    <span class="tl-dot" aria-hidden="true"></span>
+    <div class="tl-body">
+      <div class="tl-line">
+        <span class="tl-msg">{{.Message}}</span>
+        <span class="tl-time" title="{{absTime .Time}}">{{relTime .Time}}</span>
+      </div>
+      {{if .Detail}}
+      <div class="tl-detail muted">{{.Detail}}</div>
+      {{end}}
+    </div>
+  </li>
+  {{end}}
+</ol>
+{{end}} {{end}}

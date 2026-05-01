@@ -1,0 +1,23 @@
+# Caddyfile used by docker-compose to front Zeerak.
+#
+# - Listens on :8080 (mapped to host 127.0.0.1:8080) — plain HTTP, no TLS,
+#   because this rig is for local dev. Real deployments should use
+#   deploy/caddy/Caddyfile.example, which has automatic HTTPS + forward_auth.
+# - Exposes the Caddy admin API on :2019 inside the compose network so the
+#   zeerak service can read it via http://caddy:2019 (CADDY_ADMIN env).
+{
+	admin 0.0.0.0:2019
+	auto_https off
+}
+
+:8080 {
+	reverse_proxy zeerak:17878 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

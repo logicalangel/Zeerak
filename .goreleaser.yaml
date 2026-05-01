@@ -161,10 +161,10 @@ nfpms:
     rpm:
       group: System Environment/Daemons
       signature:
-        key_file: "{{ if index .Env \"NFPM_RPM_KEY_FILE\" }}{{ .Env.NFPM_RPM_KEY_FILE }}{{ end }}"
+        key_file: '{{ if index .Env "NFPM_RPM_KEY_FILE" }}{{ .Env.NFPM_RPM_KEY_FILE }}{{ end }}'
     deb:
       signature:
-        key_file: "{{ if index .Env \"NFPM_DEB_KEY_FILE\" }}{{ .Env.NFPM_DEB_KEY_FILE }}{{ end }}"
+        key_file: '{{ if index .Env "NFPM_DEB_KEY_FILE" }}{{ .Env.NFPM_DEB_KEY_FILE }}{{ end }}'
 
 # Multi-arch OCI image. The Dockerfile already builds from source; for the
 # release we push pre-built binaries into a thin Alpine image instead.

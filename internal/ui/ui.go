@@ -40,10 +40,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/zeerak/zeerak/internal/activity"
 	"github.com/zeerak/zeerak/internal/config"
 	"github.com/zeerak/zeerak/internal/diff"
 	"github.com/zeerak/zeerak/internal/model"
@@ -74,6 +76,48 @@ type Handler struct {
 
 	tmpl   map[string]*template.Template
 	static http.Handler
+
+	activity *activity.Logger // optional; nil disables timeline
+
+	mu                sync.RWMutex
+	current           policy.Presets // last applied presets (boot config or UI-confirmed)
+	pendingPresets    policy.Presets // presets staged via UI, promoted to current on confirm
+	pendingPresetsSet bool
+}
+
+// SetCurrent records the most recently applied presets so the dashboard can
+// render service cards. Callers (boot, post-confirm) update this; concurrent
+// reads on dashboard render are safe.
+func (h *Handler) SetCurrent(p policy.Presets) {
+	h.mu.Lock()
+	h.current = p
+	h.mu.Unlock()
+}
+
+func (h *Handler) currentPresets() policy.Presets {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.current
+}
+
+// SetActivityLog wires an optional activity logger. Pass nil to disable the
+// timeline (the Activity nav link hides itself when no logger is set).
+func (h *Handler) SetActivityLog(a *activity.Logger) {
+	h.mu.Lock()
+	h.activity = a
+	h.mu.Unlock()
+}
+
+func (h *Handler) logEvent(ev activity.Event) {
+	h.mu.RLock()
+	a := h.activity
+	h.mu.RUnlock()
+	if a == nil {
+		return
+	}
+	if err := a.Append(ev); err != nil {
+		h.logger.Warn("activity append", "err", err)
+	}
 }
 
 // New builds a Handler.
@@ -100,11 +144,47 @@ func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string)
 			}
 			return strings.Split(s, "\n")
 		},
+		"relTime": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			d := time.Since(t)
+			switch {
+			case d < time.Minute:
+				return "just now"
+			case d < time.Hour:
+				m := int(d / time.Minute)
+				if m == 1 {
+					return "1 minute ago"
+				}
+				return fmt.Sprintf("%d minutes ago", m)
+			case d < 24*time.Hour:
+				h := int(d / time.Hour)
+				if h == 1 {
+					return "1 hour ago"
+				}
+				return fmt.Sprintf("%d hours ago", h)
+			case d < 7*24*time.Hour:
+				dd := int(d / (24 * time.Hour))
+				if dd == 1 {
+					return "yesterday"
+				}
+				return fmt.Sprintf("%d days ago", dd)
+			default:
+				return t.Local().Format("2006-01-02 15:04")
+			}
+		},
+		"absTime": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return t.Local().Format("2006-01-02 15:04")
+		},
 	}
-	pages := []string{"dashboard", "ruleset", "presets", "preview", "error"}
+	pages := []string{"dashboard", "ruleset", "presets", "preview", "error", "activity", "edit-service"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, p := range pages {
-		t, err := template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/base.html", "templates/"+p+".html")
+		t, err := template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/base.html", "templates/_icons.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("ui: parse %s: %w", p, err)
 		}
@@ -127,8 +207,10 @@ func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string)
 // Register installs the UI routes onto mux. Safe to call once per mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.dashboard)
+	mux.HandleFunc("GET /activity", h.activityPage)
 	mux.HandleFunc("GET /ruleset", h.ruleset)
-	mux.HandleFunc("GET /presets", h.presetsForm)
+	mux.HandleFunc("GET /presets", h.presetsPicker)
+	mux.HandleFunc("GET /edit/{kind}", h.editService)
 	mux.HandleFunc("POST /ui/presets/preview", h.presetsPreview)
 	mux.HandleFunc("POST /ui/presets/stage", h.presetsStage)
 	mux.HandleFunc("POST /ui/confirm", h.confirm)
@@ -163,8 +245,33 @@ func (h *Handler) status() statusVM {
 }
 
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
+	cards := serviceCards(h.currentPresets())
+	live, err := h.reader.LiveText(r.Context())
+	if err != nil {
+		// Don't fail the page on this — show the rest, log the error.
+		h.logger.Warn("dashboard: live ruleset read failed", "err", err)
+		live = ""
+	}
+	var counts struct{ Open, Restricted, Blocked int }
+	for _, c := range cards {
+		switch c.Status {
+		case "open":
+			counts.Open++
+		case "restricted":
+			counts.Restricted++
+		default:
+			counts.Blocked++
+		}
+	}
 	h.render(w, r, "dashboard.html", baseData{
 		Title: "Zeerak",
+		Page: map[string]any{
+			"Cards":        cards,
+			"Live":         live,
+			"Defense":      defenseSummary(h.currentPresets()),
+			"Counts":       counts,
+			"Integrations": detectIntegrations(r.Context(), h.reader, h.currentPresets()),
+		},
 	})
 }
 
@@ -180,6 +287,24 @@ func (h *Handler) ruleset(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) activityPage(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	a := h.activity
+	h.mu.RUnlock()
+	var events []activity.Event
+	if a != nil {
+		evs, err := a.Recent(50)
+		if err != nil {
+			h.logger.Warn("activity recent", "err", err)
+		}
+		events = evs
+	}
+	h.render(w, r, "activity.html", baseData{
+		Title: "Activity",
+		Page:  map[string]any{"Events": events, "HasLog": a != nil},
+	})
+}
+
 // --- preset wizard ----------------------------------------------------------
 
 type presetForm struct {
@@ -187,7 +312,105 @@ type presetForm struct {
 	SSHEnabled         bool
 	SSHPort            int
 	SSHFrom            string // newline- or comma-separated CIDRs
+	SSHInterfaces     string // newline/space/comma list, e.g. "tailscale0 wg0"
+	SSHRateLimit      int    // per-minute, 0 = off (v0.3 §10 #8)
 	CaddyBox           bool
+
+	DBEnabled bool
+	DBPort    int
+	DBFrom    string
+
+	MailSMTP       bool
+	MailSubmission bool
+	MailIMAPS      bool
+	MailPOP3S      bool
+
+	OutRestrict   bool
+	OutAllowDNS   bool
+	OutAllowHTTP  bool
+	OutAllowHTTPS bool
+	OutAllowNTP   bool
+	OutAllowSMTP  bool
+	OutAllowPing  bool
+	OutCustomTCP  string // newline/comma-separated ints
+	OutBlock      string // newline/comma-separated CIDRs
+	OutBlockRefs  string // newline/comma-separated NamedBlockSet names (v0.3 §10 #7)
+	BlockSetsRaw  string // each line "setname cidr"; repeated names accumulate (v0.3 §10 #7)
+}
+
+func splitCIDRs(s string) []string {
+	var out []string
+	for _, raw := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == '\n' || r == ',' || r == ' ' || r == '\t' || r == '\r'
+	}) {
+		if raw != "" {
+			out = append(out, raw)
+		}
+	}
+	return out
+}
+
+// splitTokens splits a free-form string into non-empty tokens on whitespace
+// or commas. Used for interface names, set-name lists, etc.
+func splitTokens(s string) []string {
+	var out []string
+	for _, raw := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == '\n' || r == ',' || r == ' ' || r == '\t' || r == '\r'
+	}) {
+		if raw != "" {
+			out = append(out, raw)
+		}
+	}
+	return out
+}
+
+// parseBlockSets parses the panel's block_sets_raw textarea, where each
+// non-empty, non-comment line is "<setname> <cidr>". Repeated names
+// accumulate CIDRs into a single set; family is inferred from the CIDR
+// (":" → v6, else v4). Order is preserved by first appearance of the name.
+func parseBlockSets(s string) []policy.NamedBlockSet {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	type bucket struct {
+		idx    int
+		set    policy.NamedBlockSet
+	}
+	buckets := map[string]*bucket{}
+	var order []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// split off leading whitespace-separated name; the rest is one CIDR
+		// (commas and extra spaces handled too).
+		fields := strings.FieldsFunc(line, func(r rune) bool {
+			return r == ' ' || r == '\t' || r == ','
+		})
+		if len(fields) < 2 {
+			continue
+		}
+		name := fields[0]
+		for _, c := range fields[1:] {
+			b, ok := buckets[name]
+			if !ok {
+				fam := "v4"
+				if strings.Contains(c, ":") {
+					fam = "v6"
+				}
+				b = &bucket{idx: len(order), set: policy.NamedBlockSet{Name: name, Family: fam}}
+				buckets[name] = b
+				order = append(order, name)
+			}
+			b.set.CIDRs = append(b.set.CIDRs, c)
+		}
+	}
+	out := make([]policy.NamedBlockSet, 0, len(order))
+	for _, name := range order {
+		out = append(out, buckets[name].set)
+	}
+	return out
 }
 
 func (f presetForm) toPresets() (policy.Presets, error) {
@@ -200,15 +423,35 @@ func (f presetForm) toPresets() (policy.Presets, error) {
 		if port == 0 {
 			port = 22
 		}
-		var from []string
-		for _, raw := range strings.FieldsFunc(f.SSHFrom, func(r rune) bool {
-			return r == '\n' || r == ',' || r == ' ' || r == '\t' || r == '\r'
-		}) {
-			if raw != "" {
-				from = append(from, raw)
-			}
+		ssh := &policy.SSHPreset{Port: port, From: splitCIDRs(f.SSHFrom)}
+		if ifaces := splitTokens(f.SSHInterfaces); len(ifaces) > 0 {
+			ssh.Interfaces = ifaces
 		}
-		p.SSH = &policy.SSHPreset{Port: port, From: from}
+		if f.SSHRateLimit > 0 {
+			ssh.RateLimit = &policy.SSHRateLimit{PerMinute: f.SSHRateLimit}
+		}
+		p.SSH = ssh
+	}
+	if sets := parseBlockSets(f.BlockSetsRaw); len(sets) > 0 {
+		p.BlockSets = sets
+	}
+	if f.DBEnabled {
+		port := f.DBPort
+		if port == 0 {
+			port = 5432
+		}
+		p.Database = &policy.DatabasePreset{Port: port, From: splitCIDRs(f.DBFrom)}
+	}
+	if f.MailSMTP || f.MailSubmission || f.MailIMAPS || f.MailPOP3S {
+		p.Mail = &policy.MailPreset{
+			SMTP:       f.MailSMTP,
+			Submission: f.MailSubmission,
+			IMAPS:      f.MailIMAPS,
+			POP3S:      f.MailPOP3S,
+		}
+	}
+	if out, ok := f.toOutbound(); ok {
+		p.Outbound = out
 	}
 	if err := p.Validate(); err != nil {
 		return policy.Presets{}, err
@@ -242,12 +485,91 @@ func parsePresetForm(r *http.Request) (presetForm, error) {
 		}
 		port = n
 	}
+	rate := 0
+	if s := strings.TrimSpace(r.PostFormValue("ssh_rate_limit")); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 {
+			return presetForm{}, fmt.Errorf("ssh rate limit: must be a non-negative integer")
+		}
+		rate = n
+	}
+
+	// SSH: prefer the audience radio; fall back to legacy checkbox so old
+	// preview-form round-trips and tests keep working.
+	sshFrom := r.PostFormValue("ssh_from")
+	sshEnabled := r.PostFormValue("ssh_enabled") == "on"
+	switch r.PostFormValue("ssh_audience") {
+	case "off":
+		sshEnabled = false
+	case "any":
+		sshEnabled = true
+		sshFrom = ""
+	case "restricted":
+		sshEnabled = true
+	}
+
+	// Web: same pattern.
+	caddy := r.PostFormValue("caddy_box") == "on"
+	switch r.PostFormValue("web_audience") {
+	case "off":
+		caddy = false
+	case "any":
+		caddy = true
+	}
+
+	// Database
+	dbPort := 0
+	if s := strings.TrimSpace(r.PostFormValue("db_port")); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return presetForm{}, fmt.Errorf("database port: %w", err)
+		}
+		dbPort = n
+	}
+	dbFrom := r.PostFormValue("db_from")
+	dbEnabled := r.PostFormValue("db_enabled") == "on"
+	switch r.PostFormValue("db_audience") {
+	case "off":
+		dbEnabled = false
+	case "any":
+		dbEnabled = true
+		dbFrom = ""
+	case "restricted":
+		dbEnabled = true
+	}
+
+	// Mail — each port independent.
+	mailSMTP := r.PostFormValue("mail_smtp") == "on"
+	mailSub := r.PostFormValue("mail_submission") == "on"
+	mailIMAPS := r.PostFormValue("mail_imaps") == "on"
+	mailPOP3S := r.PostFormValue("mail_pop3s") == "on"
+
 	return presetForm{
 		DefaultDenyInbound: r.PostFormValue("default_deny_inbound") == "on",
-		SSHEnabled:         r.PostFormValue("ssh_enabled") == "on",
+		SSHEnabled:         sshEnabled,
 		SSHPort:            port,
-		SSHFrom:            r.PostFormValue("ssh_from"),
-		CaddyBox:           r.PostFormValue("caddy_box") == "on",
+		SSHFrom:            sshFrom,
+		SSHInterfaces:      r.PostFormValue("ssh_interfaces"),
+		SSHRateLimit:       rate,
+		CaddyBox:           caddy,
+		DBEnabled:          dbEnabled,
+		DBPort:             dbPort,
+		DBFrom:             dbFrom,
+		MailSMTP:           mailSMTP,
+		MailSubmission:     mailSub,
+		MailIMAPS:          mailIMAPS,
+		MailPOP3S:          mailPOP3S,
+		OutRestrict:        r.PostFormValue("out_restrict") == "on",
+		OutAllowDNS:        r.PostFormValue("out_allow_dns") == "on",
+		OutAllowHTTP:       r.PostFormValue("out_allow_http") == "on",
+		OutAllowHTTPS:      r.PostFormValue("out_allow_https") == "on",
+		OutAllowNTP:        r.PostFormValue("out_allow_ntp") == "on",
+		OutAllowSMTP:       r.PostFormValue("out_allow_smtp") == "on",
+		OutAllowPing:       r.PostFormValue("out_allow_ping") == "on",
+		OutCustomTCP:       r.PostFormValue("out_custom_tcp"),
+		OutBlock:           r.PostFormValue("out_block"),
+		OutBlockRefs:       r.PostFormValue("out_block_refs"),
+		BlockSetsRaw:       r.PostFormValue("block_sets_raw"),
 	}, nil
 }
 
@@ -256,7 +578,119 @@ func (h *Handler) presetsForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Presets",
 		Flash: r.URL.Query().Get("flash"),
 		Page: map[string]any{
-			"Form": presetForm{SSHPort: 22},
+			"Form": presetForm{SSHPort: 22, DBPort: 5432},
+		},
+	})
+}
+
+// editServiceMeta describes each per-service editor page.
+var editServiceMeta = map[string]struct {
+	Icon, Name, Subtitle string
+}{
+	"ssh":        {"key", "Remote access (SSH)", "Who can log in to this machine remotely."},
+	"web":        {"globe", "Website", "Who can reach the public website (HTTP/HTTPS)."},
+	"db":         {"database", "Database", "Who can connect to the database."},
+	"mail":       {"mail", "Mail", "Which mail ports are open."},
+	"protection": {"shield", "Default protection", "Block everything that isn't explicitly allowed."},
+	"outbound":   {"upload", "Outbound traffic", "What this machine is allowed to send to the internet."},
+}
+
+// presetFormFromPresets seeds a presetForm from the currently applied presets.
+func presetFormFromPresets(p policy.Presets) presetForm {
+	f := presetForm{
+		DefaultDenyInbound: p.DefaultDenyInbound,
+		CaddyBox:           p.CaddyBox,
+		SSHPort:            22,
+		DBPort:             5432,
+	}
+	if p.SSH != nil {
+		f.SSHEnabled = true
+		if p.SSH.Port > 0 {
+			f.SSHPort = p.SSH.Port
+		}
+		if len(p.SSH.From) > 0 {
+			f.SSHFrom = strings.Join(p.SSH.From, "\n")
+		}
+		if len(p.SSH.Interfaces) > 0 {
+			f.SSHInterfaces = strings.Join(p.SSH.Interfaces, " ")
+		}
+		if p.SSH.RateLimit != nil {
+			f.SSHRateLimit = p.SSH.RateLimit.PerMinute
+		}
+	}
+	if p.Database != nil {
+		f.DBEnabled = true
+		if p.Database.Port > 0 {
+			f.DBPort = p.Database.Port
+		}
+		if len(p.Database.From) > 0 {
+			f.DBFrom = strings.Join(p.Database.From, "\n")
+		}
+	}
+	if p.Mail != nil {
+		f.MailSMTP = p.Mail.SMTP
+		f.MailSubmission = p.Mail.Submission
+		f.MailIMAPS = p.Mail.IMAPS
+		f.MailPOP3S = p.Mail.POP3S
+	}
+	if p.Outbound != nil {
+		f.OutRestrict = p.Outbound.Restrict
+		f.OutAllowDNS = p.Outbound.AllowDNS
+		f.OutAllowHTTP = p.Outbound.AllowHTTP
+		f.OutAllowHTTPS = p.Outbound.AllowHTTPS
+		f.OutAllowNTP = p.Outbound.AllowNTP
+		f.OutAllowSMTP = p.Outbound.AllowSMTP
+		f.OutAllowPing = p.Outbound.AllowPing
+		if len(p.Outbound.CustomTCP) > 0 {
+			parts := make([]string, len(p.Outbound.CustomTCP))
+			for i, n := range p.Outbound.CustomTCP {
+				parts[i] = strconv.Itoa(n)
+			}
+			f.OutCustomTCP = strings.Join(parts, "\n")
+		}
+		if len(p.Outbound.Block) > 0 {
+			f.OutBlock = strings.Join(p.Outbound.Block, "\n")
+		}
+		if len(p.Outbound.BlockRefs) > 0 {
+			f.OutBlockRefs = strings.Join(p.Outbound.BlockRefs, " ")
+		}
+	}
+	if len(p.BlockSets) > 0 {
+		var lines []string
+		for _, s := range p.BlockSets {
+			for _, c := range s.CIDRs {
+				lines = append(lines, s.Name+" "+c)
+			}
+		}
+		f.BlockSetsRaw = strings.Join(lines, "\n")
+	}
+	return f
+}
+
+func (h *Handler) presetsPicker(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "presets.html", baseData{
+		Title: "Add or change a service",
+		Page: map[string]any{
+			"Cards": serviceCards(h.currentPresets()),
+		},
+	})
+}
+
+func (h *Handler) editService(w http.ResponseWriter, r *http.Request) {
+	kind := r.PathValue("kind")
+	meta, ok := editServiceMeta[kind]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h.render(w, r, "edit-service.html", baseData{
+		Title: meta.Name,
+		Page: map[string]any{
+			"Kind":     kind,
+			"Icon":     meta.Icon,
+			"Name":     meta.Name,
+			"Subtitle": meta.Subtitle,
+			"Form":     presetFormFromPresets(h.currentPresets()),
 		},
 	})
 }
@@ -316,6 +750,9 @@ func (h *Handler) presetsPreview(w http.ResponseWriter, r *http.Request) {
 			"Rendered": rendered,
 			"Live":     live,
 			"Diff":     diff.Unified(live, rendered, "live", "candidate"),
+			"Before":   serviceCards(h.currentPresets()),
+			"After":    serviceCards(cfg.Presets),
+			"Summary":  presetsSummary(cfg.Presets),
 		},
 	})
 }
@@ -351,6 +788,12 @@ func (h *Handler) presetsStage(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Stash the pending presets so the dashboard reflects them once confirmed.
+	h.mu.Lock()
+	h.pendingPresets = cfg.Presets
+	h.pendingPresetsSet = true
+	h.mu.Unlock()
+	h.logEvent(activity.Event{Kind: activity.KindStaged, Message: "You staged a change.", Detail: presetsSummary(cfg.Presets)})
 	http.Redirect(w, r, "/?flash=staged", http.StatusSeeOther)
 }
 
@@ -361,6 +804,14 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?error="+urlSafe(err.Error()), http.StatusSeeOther)
 		return
 	}
+	h.mu.Lock()
+	if h.pendingPresetsSet {
+		h.current = h.pendingPresets
+	}
+	h.pendingPresets = policy.Presets{}
+	h.pendingPresetsSet = false
+	h.mu.Unlock()
+	h.logEvent(activity.Event{Kind: activity.KindConfirmed, Message: "You confirmed the change."})
 	http.Redirect(w, r, "/?flash=confirmed", http.StatusSeeOther)
 }
 
@@ -369,6 +820,11 @@ func (h *Handler) rollback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?error="+urlSafe(err.Error()), http.StatusSeeOther)
 		return
 	}
+	h.mu.Lock()
+	h.pendingPresets = policy.Presets{}
+	h.pendingPresetsSet = false
+	h.mu.Unlock()
+	h.logEvent(activity.Event{Kind: activity.KindReverted, Message: "You reverted the staged change."})
 	http.Redirect(w, r, "/?flash=rolledback", http.StatusSeeOther)
 }
 
@@ -443,4 +899,33 @@ func diffLineClass(line string) string {
 func urlSafe(s string) string {
 	r := strings.NewReplacer(" ", "+", "\n", " ", "&", "%26", "?", "%3F", "#", "%23")
 	return r.Replace(s)
+}
+
+// toOutbound converts the form's outbound fields into a policy preset.
+// Returns (nil, false) when no outbound feature is enabled.
+func (f presetForm) toOutbound() (*policy.OutboundPreset, bool) {
+	out := &policy.OutboundPreset{
+		Restrict:   f.OutRestrict,
+		AllowDNS:   f.OutAllowDNS,
+		AllowHTTP:  f.OutAllowHTTP,
+		AllowHTTPS: f.OutAllowHTTPS,
+		AllowNTP:   f.OutAllowNTP,
+		AllowSMTP:  f.OutAllowSMTP,
+		AllowPing:  f.OutAllowPing,
+		Block:      splitCIDRs(f.OutBlock),
+		BlockRefs:  splitTokens(f.OutBlockRefs),
+	}
+	for _, raw := range strings.FieldsFunc(f.OutCustomTCP, func(r rune) bool {
+		return r == '\n' || r == ',' || r == ' ' || r == '\t' || r == '\r'
+	}) {
+		if n, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil {
+			out.CustomTCP = append(out.CustomTCP, n)
+		}
+	}
+	if !out.Active() && !out.AllowDNS && !out.AllowHTTP && !out.AllowHTTPS &&
+		!out.AllowNTP && !out.AllowSMTP && !out.AllowPing &&
+		len(out.CustomTCP) == 0 {
+		return nil, false
+	}
+	return out, true
 }

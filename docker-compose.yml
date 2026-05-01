@@ -2,15 +2,18 @@
 #
 # Spins up zeerak-server in its own net namespace with CAP_NET_ADMIN so
 # the nftables backend works for real on macOS / Windows / Linux hosts
-# without touching the host firewall.
+# without touching the host firewall. Caddy fronts it on :8080 and also
+# exposes its admin API on :2019 so zeerak can show the "Caddy detected"
+# pill on the dashboard (VISION.md §4 mode B).
 #
 #   docker compose up --build
-#   curl http://127.0.0.1:7878/healthz
-#   curl http://127.0.0.1:7878/status
+#   curl http://127.0.0.1:8080/healthz       # via Caddy
+#   curl http://127.0.0.1:17878/healthz      # direct
+#   open http://127.0.0.1:8080/              # web panel via Caddy
 #
 # To exercise the full stage→confirm flow:
 #   curl -X POST --data-binary @deploy/examples/zeerak-presets.yaml \
-#        http://127.0.0.1:7878/preview
+#        http://127.0.0.1:8080/preview
 #
 services:
   zeerak:
@@ -23,19 +26,53 @@ services:
     # container has its own netns, so playing with rules here is safe.
     cap_add:
       - NET_ADMIN
+    # NOTE: do not prefix the host IP (e.g. "127.0.0.1:7878:7878").
+    # Docker Desktop on macOS can stall forwarded bytes with that form
+    # (TCP handshake succeeds via docker-proxy but the upstream pipe
+    # never delivers payload). Plain "PORT:PORT" still binds to
+    # 127.0.0.1 by default on Docker Desktop and works reliably.
     ports:
-      - "127.0.0.1:7878:7878"
+      - "0.0.0.0:17878:17878"
+    environment:
+      # Point the integrations/caddy detector at the sidecar.
+      CADDY_ADMIN: "http://caddy:2019"
     volumes:
-      # Mount your config read-only; edit on the host, restart container.
-      - ./deploy/examples/zeerak.yaml:/etc/zeerak/zeerak.yaml:ro
+      # Mount the compose-specific config so the published panel port is
+      # also allowed by the container's nftables policy.
+      - ./deploy/examples/zeerak-docker.yaml:/etc/zeerak/zeerak.yaml:ro
       # Persist autosave between restarts.
       - zeerak-state:/var/lib/zeerak
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7878/healthz"]
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:17878/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: zeerak-caddy
+    depends_on:
+      zeerak:
+        condition: service_healthy
+    ports:
+      # Public-facing reverse proxy.
+      - "127.0.0.1:8080:8080"
+      # Admin API — exposed for local dev convenience (curl localhost:2019/config/).
+      # Comment this out to lock the admin API to the compose network only.
+      - "127.0.0.1:2019:2019"
+    volumes:
+      - ./deploy/caddy/Caddyfile.compose:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:2019/config/"]
       interval: 10s
       timeout: 3s
       retries: 3
 
 volumes:
   zeerak-state:
+  caddy-data:
+  caddy-config:

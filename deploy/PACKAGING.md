@@ -9,14 +9,14 @@ and a multi-arch GHCR image.
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) runs
 [goreleaser](https://goreleaser.com) which produces:
 
-| Artifact | Source | Where it lands |
-| --- | --- | --- |
-| `*.tar.gz`, `SHA256SUMS`, SBOMs | `archives:` + `sboms:` | GitHub Release |
-| `*.deb` | `nfpms:` | GitHub Release |
-| `*.rpm` | `nfpms:` | GitHub Release |
-| `*.apk` | `nfpms:` | GitHub Release |
-| `ghcr.io/logicalangel/zeerak:<ver>` (linux/amd64 + linux/arm64) | `dockers:` + `docker_manifests:` | GHCR |
-| `Formula/zeerak.rb` | `brews:` | [`logicalangel/homebrew-zeerak`](https://github.com/logicalangel/homebrew-zeerak) |
+| Artifact                                                        | Source                           | Where it lands                                                                    |
+| --------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------- |
+| `*.tar.gz`, `SHA256SUMS`, SBOMs                                 | `archives:` + `sboms:`           | GitHub Release                                                                    |
+| `*.deb`                                                         | `nfpms:`                         | GitHub Release                                                                    |
+| `*.rpm`                                                         | `nfpms:`                         | GitHub Release                                                                    |
+| `*.apk`                                                         | `nfpms:`                         | GitHub Release                                                                    |
+| `ghcr.io/logicalangel/zeerak:<ver>` (linux/amd64 + linux/arm64) | `dockers:` + `docker_manifests:` | GHCR                                                                              |
+| `Formula/zeerak.rb`                                             | `brews:`                         | [`logicalangel/homebrew-zeerak`](https://github.com/logicalangel/homebrew-zeerak) |
 
 The release workflow needs one extra repo secret beyond the default
 `GITHUB_TOKEN`:

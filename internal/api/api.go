@@ -19,6 +19,7 @@ package api
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,9 @@ import (
 	"github.com/zeerak/zeerak/internal/render"
 	"github.com/zeerak/zeerak/internal/stager"
 )
+
+//go:embed openapi.yaml
+var openAPISpec []byte
 
 // Reader is the read-only kernel view used by /ruleset/live and /preview.
 // internal/nft.Adapter satisfies it; tests provide a fake.
@@ -86,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /version", s.handleVersion)
 	mux.HandleFunc("GET /status", s.handleStatus)
 	mux.HandleFunc("GET /ruleset/live", s.handleRulesetLive)
+	mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPI)
 	mux.HandleFunc("POST /preview", s.handlePreview)
 	mux.HandleFunc("POST /stage", s.handleStage)
 	mux.HandleFunc("POST /confirm", s.handleConfirm)
@@ -166,6 +171,11 @@ func (s *Server) Serve(ctx context.Context, listen, socketPath string) error {
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(openAPISpec)
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {

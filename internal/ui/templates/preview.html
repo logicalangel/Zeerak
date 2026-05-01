@@ -1,43 +1,128 @@
-{{define "preview.html"}}{{template "base.html" .}}{{end}}
+{{define "preview.html"}}{{template "base.html" .}}{{end}} {{define "body"}}
+{{$p := .Page}} {{$f := $p.Form}}
 
-{{define "body"}}
-{{$p := .Page}}
-{{$f := $p.Form}}
-<section class="card">
-  <header class="card-header">
-    <h1>Preview</h1>
-    <span class="badge badge-warn">not staged yet</span>
-  </header>
-  <div class="card-body">
-    <p class="muted">The diff below shows what will change in the kernel ruleset if you stage. Staging arms the auto-rollback timer; you must confirm within the window.</p>
+<section class="page-head">
+  <h1>Review changes</h1>
+  <p class="muted">{{$p.Summary}}</p>
+</section>
 
-    <h3>Diff vs live</h3>
+<div class="compare">
+  <div class="compare-col">
+    <h2 class="compare-title">Now</h2>
+    <div class="service-grid">
+      {{range $p.Before}}
+      <div class="service-card {{if .Disabled}}service-card-soft{{end}}">
+        <div class="service-icon">{{template "icon" .Icon}}</div>
+        <div class="service-name">{{.Name}}</div>
+        <div class="service-sub muted">{{.Subtitle}}</div>
+        <span class="service-pill pill-{{.Status}}">{{.Status}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  <div class="compare-arrow" aria-hidden="true">→</div>
+  <div class="compare-col">
+    <h2 class="compare-title">After</h2>
+    <div class="service-grid">
+      {{range $p.After}}
+      <div class="service-card {{if .Disabled}}service-card-soft{{end}}">
+        <div class="service-icon">{{template "icon" .Icon}}</div>
+        <div class="service-name">{{.Name}}</div>
+        <div class="service-sub muted">{{.Subtitle}}</div>
+        <span class="service-pill pill-{{.Status}}">{{.Status}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<form method="post" action="/ui/presets/stage" class="wizard-actions">
+  <input
+    type="hidden"
+    name="default_deny_inbound"
+    value="{{if $f.DefaultDenyInbound}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="ssh_enabled"
+    value="{{if $f.SSHEnabled}}on{{end}}"
+  />
+  <input type="hidden" name="ssh_port" value="{{$f.SSHPort}}" />
+  <input type="hidden" name="ssh_from" value="{{$f.SSHFrom}}" />
+  <input type="hidden" name="caddy_box" value="{{if $f.CaddyBox}}on{{end}}" />
+  <input type="hidden" name="db_enabled" value="{{if $f.DBEnabled}}on{{end}}" />
+  <input type="hidden" name="db_port" value="{{$f.DBPort}}" />
+  <input type="hidden" name="db_from" value="{{$f.DBFrom}}" />
+  <input type="hidden" name="mail_smtp" value="{{if $f.MailSMTP}}on{{end}}" />
+  <input
+    type="hidden"
+    name="mail_submission"
+    value="{{if $f.MailSubmission}}on{{end}}"
+  />
+  <input type="hidden" name="mail_imaps" value="{{if $f.MailIMAPS}}on{{end}}" />
+  <input type="hidden" name="mail_pop3s" value="{{if $f.MailPOP3S}}on{{end}}" />
+  <input
+    type="hidden"
+    name="out_restrict"
+    value="{{if $f.OutRestrict}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_dns"
+    value="{{if $f.OutAllowDNS}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_http"
+    value="{{if $f.OutAllowHTTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_https"
+    value="{{if $f.OutAllowHTTPS}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_ntp"
+    value="{{if $f.OutAllowNTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_smtp"
+    value="{{if $f.OutAllowSMTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_ping"
+    value="{{if $f.OutAllowPing}}on{{end}}"
+  />
+  <input type="hidden" name="out_custom_tcp" value="{{$f.OutCustomTCP}}" />
+  <input type="hidden" name="out_block" value="{{$f.OutBlock}}" />
+  <button class="btn btn-primary" type="submit">
+    Apply with auto-rollback
+  </button>
+  <a class="btn btn-ghost" href="/presets">Back</a>
+</form>
+
+<details class="tech-disclosure">
+  <summary>Show technical diff</summary>
+  <div class="tech-pane">
     {{if $p.Diff}}
-      <pre class="pre diff">{{range (splitLines $p.Diff)}}<span class="{{diffLineClass .}}">{{.}}</span>
+    <pre
+      class="pre diff"
+    >{{range (splitLines $p.Diff)}}<span class="{{diffLineClass .}}">{{.}}</span>
 {{end}}</pre>
     {{else}}
-      <p class="muted">No changes — candidate matches what's live.</p>
+    <p class="muted">No changes — candidate matches what's live.</p>
     {{end}}
-
     <details class="details">
       <summary>Rendered nft (full)</summary>
       <pre class="pre">{{$p.Rendered}}</pre>
     </details>
-
     <details class="details">
       <summary>Generated zeerak.yaml</summary>
       <pre class="pre">{{$p.YAML}}</pre>
     </details>
-
-    <form method="post" action="/ui/presets/stage" class="form-actions">
-      <input type="hidden" name="default_deny_inbound" value="{{if $f.DefaultDenyInbound}}on{{end}}">
-      <input type="hidden" name="ssh_enabled"          value="{{if $f.SSHEnabled}}on{{end}}">
-      <input type="hidden" name="ssh_port"             value="{{$f.SSHPort}}">
-      <input type="hidden" name="ssh_from"             value="{{$f.SSHFrom}}">
-      <input type="hidden" name="caddy_box"            value="{{if $f.CaddyBox}}on{{end}}">
-      <button class="btn btn-primary" type="submit">Stage with auto-rollback</button>
-      <a class="btn btn-ghost" href="/presets">Back to wizard</a>
-    </form>
   </div>
-</section>
+</details>
 {{end}}

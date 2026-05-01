@@ -3,7 +3,7 @@
 // confirm, preview, ruleset.
 //
 // By default it talks to the unix socket at /run/zeerak/zeerak.sock.
-// Override with --addr or ZEERAK_ADDR (e.g. http://127.0.0.1:7878).
+// Override with --addr or ZEERAK_ADDR (e.g. http://127.0.0.1:17878).
 //
 // See VISION.md §3 (CLI).
 package main

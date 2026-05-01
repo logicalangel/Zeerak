@@ -12,7 +12,7 @@ Most Linux firewall front-ends fall into two camps:
 - **Heavyweight** (pfSense/OPNsense-style appliances) — full OSes, overkill for a single VPS or homelab box.
 - **Bare** (`nft`, `iptables`, `ufw`) — powerful but unfriendly; easy to lock yourself out, hard to reason about rule order.
 
-Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux host that gives you a clean web UI to manage **nftables** rules safely, with sensible defaults, presets for common use cases, and tight integration with tools you already use (Caddy, Docker, Tailscale, fail2ban).
+Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux host that gives you a clean web UI to manage **nftables** rules safely, with sensible defaults, presets for common use cases, and tight integration with tools you already use (Caddy, Docker, Tailscale, NATS, fail2ban).
 
 ### Design principles
 
@@ -23,35 +23,17 @@ Zeerak aims for the **sweet spot**: a single small binary you drop on a Linux ho
 5. **Readable** — the UI shows nftables in human terms _and_ shows the generated `nft` ruleset side-by-side. Power users keep their power.
 6. **Opinionated presets** — "allow SSH from my IP", "expose Caddy on 80/443", "block country X", "only Tailscale" — one click.
 7. **Great DX** — clear API, OpenAPI spec, declarative config (so it can live in git), `zeerak` CLI mirrors the UI.
-8. **Boring tech** — Go + server-rendered HTML (HTMX) + a sprinkle of Svelte for interactivity. No SPA build hell.
-9. **Open source, easy to install** — 100% open-source on GitHub, developed in the open. Distributed through standard public channels: GitHub Releases, GHCR, and major distro repositories (Debian/Ubuntu APT, Fedora COPR, Arch AUR, Alpine, Homebrew). A single `apt install zeerak` / `dnf install zeerak` / `brew install zeerak` should _just work_ — no curl-pipe-bash required.
+8. **Boring tech** — Go + server-rendered HTML (`html/template`) + a sprinkle of vanilla JS. No SPA build hell.
+9. **Open source, easy to install** — 100% open-source on GitHub, developed in the open. Distributed through standard public channels (PPA, COPR, AUR, Alpine, Homebrew, GHCR) so a single `apt install zeerak` / `dnf install zeerak` / `brew install zeerak` _just works_ — no curl-pipe-bash required. (See README for the install matrix.)
 
 ### Open source
 
 Zeerak is **open source from day one** under **Apache-2.0**, developed in public on GitHub. Issues, design discussions, and roadmap live in the repo. The Apache-2.0 license is OSI-approved, free forever for personal and commercial use — but the **"Zeerak" name and logo are reserved** to the upstream project (see `TRADEMARKS.md`). Forks are welcome; they just need to pick their own name.
 
-### Distribution — install from public repositories
-
-The goal is that any Linux user can get Zeerak with a single command from the package manager they already trust:
-
-| Channel          | Command                                                                  |
-| ---------------- | ------------------------------------------------------------------------ |
-| Debian / Ubuntu  | `apt install zeerak` (official PPA, then upstream Debian)                |
-| Fedora / RHEL    | `dnf install zeerak` (Fedora COPR, then official)                        |
-| Arch Linux       | `pacman -S zeerak` (AUR first, then community)                           |
-| Alpine           | `apk add zeerak`                                                         |
-| openSUSE         | `zypper install zeerak` (OBS)                                            |
-| macOS (CLI only) | `brew install zeerak`                                                    |
-| Containers       | `docker pull ghcr.io/logicalangel/zeerak`                                |
-| Source           | `go install github.com/logicalangel/Zeerak/cmd/zeerak-server@latest`     |
-| Manual           | static binaries on every GitHub Release (SHA256SUMS + CycloneDX SBOMs; cosign signing planned for v0.3) |
-
-Releases are reproducible, signed, and accompanied by an SBOM. No proprietary build steps, no closed binaries.
-
 ### Non-goals (for v1)
 
 - Not a full router OS — no DHCP, DNS, VPN _server_, or captive portal. (NAT/forwarding rules **are** in scope; nftables does that natively and we'll surface it.)
-- Not a heavyweight fleet orchestrator — cluster mode (§6) is intentionally simple master/agent config distribution, not a SaaS control plane.
+- Not a heavyweight fleet orchestrator — cluster mode (§5) is intentionally simple master/agent config distribution, not a SaaS control plane.
 - Not iptables-compatible — nftables only.
 
 ---
@@ -72,85 +54,11 @@ Releases are reproducible, signed, and accompanied by an SBOM. No proprietary bu
 - **"Wireguard/Tailscale-only admin"**: SSH only reachable over the tunnel.
 - **"Country block"**: drop traffic from a list of CIDRs (ipset-backed, auto-updated).
 - **"Rate-limit SSH"**: 5 attempts/min/IP, drop excess.
+- **"Locked-down egress"**: outbound default-deny with an allowlist (DNS, NTP, HTTPS, package mirrors) — catches malware phone-home and accidental data exfil.
 
 ---
 
-## 3. Architecture (proposed)
-
-```
-┌──────────────────────────────────────────────┐
-│  Browser (HTMX + Svelte islands + Tailwind)  │
-└──────────────────┬───────────────────────────┘
-                   │ HTTPS + auth (handled by reverse proxy)
-┌──────────────────▼───────────────────────────┐
-│  Caddy / nginx / Tailscale Serve             │
-│  - TLS, optional forward_auth / SSO          │
-└──────────────────┬───────────────────────────┘
-                   │ HTTP on 127.0.0.1 or unix socket
-┌──────────────────▼───────────────────────────┐
-│  zeerak-server (single Go binary)            │
-│  ├── HTTP API (net/http) + HTMX views        │
-│  │     /healthz /version /status             │
-│  │     /stage /confirm /rollback             │
-│  ├── Config loader/watcher (zeerak.yaml)     │
-│  ├── Rule engine                             │
-│  │     model → validator → nft renderer      │
-│  ├── Stager (apply with auto-rollback)       │
-│  └── Integrations: Caddy, Docker, Tailscale  │
-└─────┬─────────────────────────────┬──────────┘
-      │ netlink / `nft -j`           │ structured logs
-┌─────▼──────────────┐         ┌─────▼──────────┐
-│  kernel: nftables  │         │  systemd-      │
-│                    │         │  journald      │
-└────────────────────┘         └────────────────┘
-```
-
-### Stack
-
-- **Language**: Go — single static binary, great for sysadmin tooling.
-- **Web**: server-rendered HTML + [HTMX](https://htmx.org) for interactivity, small Svelte islands for the rule editor / live diff.
-- **UI components**: [**shadcn-svelte**](https://www.shadcn-svelte.com) — copy-in components (not a dep), accessible, themeable, and matches the "boring tech, great DX" line. We own the component code, no surprise upstream churn.
-- **Styling**: Tailwind CSS (which shadcn-svelte builds on).
-- **State**: **none on disk except `zeerak.yaml`**. The config file is the source of truth — like `Caddyfile` or `caddy.json`. Reload on SIGHUP / API call. Put it in `/etc/zeerak/zeerak.yaml`, version it with `git`.
-- **No user database**: Zeerak listens on `127.0.0.1` or a unix socket by default. Auth (TLS, SSO, basic auth, IP allowlist) is the reverse proxy's job — exactly the pattern Caddy itself uses for its admin API on `:2019`.
-- **No audit table**: every config change is logged to `journald` (who/what/when from the proxy + the diff), and history is whatever `git log /etc/zeerak/` tells you. `journalctl -u zeerak` is your audit trail.
-- **nftables interface**: prefer [`google/nftables`](https://github.com/google/nftables) (netlink) for reads & atomic transactions; shell out to `nft -f -` as a fallback for human-readable apply.
-- **API**: small REST surface on `net/http` (Go 1.22+ method routing — no router dep). OpenAPI 3.1 spec generated from code (v0.3).
-- **CLI**: `zeerak` binary speaks the same API over the unix socket — handy for scripts & GitOps.
-
-### Repo layout (initial sketch)
-
-```
-zeerak/
-├── cmd/
-│   ├── zeerak-server/      # daemon
-│   └── zeerak/             # CLI
-├── internal/
-│   ├── config/             # zeerak.yaml loader, watcher, validator
-│   ├── model/              # Rule, Chain, Set, Policy types
-│   ├── render/             # model → nft ruleset
-│   ├── nft/                # netlink + `nft` shell adapter
-│   ├── stager/             # stage → preview → commit → rollback
-│   ├── api/                # HTTP handlers + OpenAPI (loopback / unix sock)
-│   ├── cluster/            # master/agent sync over SSH (mTLS fallback), push/pull
-│   ├── ui/                 # HTMX templates, Svelte islands
-│   └── integrations/
-│       ├── caddy/
-│       ├── docker/
-│       └── tailscale/
-├── web/                    # Tailwind + Svelte source
-├── deploy/
-│   ├── systemd/
-│   ├── caddy/              # example Caddyfile
-│   └── docker/
-├── testkit/                # zeerak-testkit: VM/netns harness + scenarios
-├── docs/
-└── VISION.md               # this file
-```
-
----
-
-## 4. Safety: the "auto-rollback" pattern
+## 3. Safety: the "auto-rollback" pattern
 
 The single biggest fear with a remote firewall UI is **locking yourself out**. Zeerak's apply flow:
 
@@ -163,17 +71,17 @@ This is borrowed from Mikrotik's "safe mode" and from `iptables-apply`. It shoul
 
 ---
 
-## 5. Caddy Integration (you asked for both 🎯)
+## 4. Caddy Integration
 
 Two complementary modes:
 
 ### A. Caddy in front of Zeerak (recommended deployment)
 
-- Caddy terminates TLS and reverse-proxies to `zeerak-server` on `127.0.0.1:7878`.
+- Caddy terminates TLS and reverse-proxies to `zeerak-server` on `127.0.0.1:17878`.
 - Zeerak ships an example `Caddyfile`:
   ```caddyfile
   zeerak.example.com {
-      reverse_proxy 127.0.0.1:7878
+      reverse_proxy 127.0.0.1:17878
       # optional: SSO via Authelia / Authentik
       # forward_auth ...
   }
@@ -194,7 +102,7 @@ Both modes are **opt-in** and decoupled: you can use A without B.
 
 ---
 
-## 6. Cluster mode — master/agent config distribution
+## 5. Cluster mode — master/agent config distribution
 
 For users with more than one host (small fleets, edge boxes, multiple VPSes), Zeerak ships a simple **master/agent** model. It is **opt-in**; a stand-alone Zeerak knows nothing about it.
 
@@ -232,7 +140,7 @@ For users with more than one host (small fleets, edge boxes, multiple VPSes), Ze
 
 ---
 
-## 7. Test kit — `zeerak-testkit`
+## 6. Test kit — `zeerak-testkit`
 
 A firewall is only as good as your confidence that it does what you think. `zeerak-testkit` ships in the same repo and is used by both contributors (CI) and operators (pre-prod validation).
 
@@ -275,16 +183,17 @@ A firewall is only as good as your confidence that it does what you think. `zeer
 
 ---
 
-## 8. Other integrations (post-v1, planned)
+## 7. Other integrations (post-v1, planned)
 
 - **Docker**: detect Docker's `DOCKER` and `DOCKER-USER` chains, surface them, let you add rules to `DOCKER-USER` safely.
 - **Tailscale**: detect `tailscale0`, presets like _"admin services only on tailnet"_.
+- **NATS**: detect a local `nats-server` (config or `:8222` monitoring endpoint), surface its client/route/leafnode/gateway/WebSocket ports (4222/6222/7422/7522/443), and one-click presets like _"NATS clients on tailnet only"_, _"cluster routes pinned to private CIDRs"_, or _"leafnode/gateway over WireGuard"_. Warn if the firewall blocks a port `nats-server` is listening on (same footgun pattern as Caddy).
 - **fail2ban / CrowdSec**: visualize their bans, allow Zeerak to manage the underlying nft sets directly.
 - **GeoIP / threat feeds**: scheduled-updated nft sets from MaxMind / Spamhaus / Firehol.
 
 ---
 
-## 9. MCP support — `zeerak-mcp`
+## 8. MCP support — `zeerak-mcp`
 
 Zeerak ships a first-class **[Model Context Protocol](https://modelcontextprotocol.io)** server so AI assistants (Claude Desktop, Copilot, Continue, Cursor, custom agents) can read state and — _carefully_ — propose changes. Same safety bar as a human: every mutation goes through stage → preview → commit-with-rollback.
 
@@ -354,51 +263,22 @@ The assistant proposes; the human commits. Always.
 
 ---
 
-## 10. Roadmap
+## 9. Roadmap
 
-### v0.1 — "It works on my VPS"
-
-- [x] `zeerak.yaml` schema + loader + validator
-- [x] Rule model + nft text renderer (round-trip fuzz against `nft -j` deferred)
-- [x] `nft -f -` kernel adapter (Linux build tag) with non-Linux stub for dev hosts
-- [x] Stager: apply → auto-rollback timer → confirm (race-tested)
-- [x] HTTP API on loopback + unix socket: `/status` `/stage` `/confirm` `/rollback`
-- [x] Structured logs (`log/slog` JSON → journald via stderr)
-- [x] **Test kit v0**: netns harness wired into CI under `unshare -U -r -n`
-- [x] Presets: "Caddy box", "SSH from my IP" (with v4/v6 allowlist), "default deny inbound"
-- [x] Caddyfile example + systemd unit (CAP_NET_ADMIN-only, hardened)
-- [x] Read current nftables ruleset, render in UI (read-only)
-- [x] Diff/preview view between staged candidate and live ruleset
-
-### v0.2 — CLI, packaging, MCP
-
-- [x] CLI (`zeerak apply -f config.yaml`) — GitOps-friendly
-- [x] Public packages: `.deb` PPA, Fedora COPR, AUR, Homebrew tap, GHCR image
-  - [x] GoReleaser pipeline → multi-arch `.deb` / `.rpm` / `.apk` + tarballs + SBOMs
-  - [x] GHCR multi-arch image `ghcr.io/logicalangel/zeerak`
-  - [x] Homebrew tap `logicalangel/homebrew-zeerak`
-  - [x] AUR binary package `zeerak-bin` (`deploy/aur/`)
-  - [x] Fedora COPR spec (`deploy/copr/zeerak.spec`)
-  - [x] Launchpad PPA scaffold (`deploy/ppa/debian/`) — uploaded by maintainer per release
-- [x] **MCP server v0** — read-only resources + `explain_rule` / `simulate_packet`, stdio + HTTP transports
-- [x] **Web panel v0.2.5** — server-rendered dashboard, live ruleset, preset wizard with diff preview (HTMX + Svelte islands + shadcn-svelte deferred to v0.3 alongside the rule designer)
-
-> **Deferred to v0.3+:** Caddy admin-API panel, Docker chain awareness,
-> OpenAPI spec + generated client, MCP SSE/streaming transport. Tracked
-> but not blocking v0.2.
+**v0.1 + v0.2 — shipped.** Daemon, CLI, MCP read-only server, web panel with preset wizard, packaging (deb/rpm/apk/AUR/Homebrew/GHCR), netns test kit. See [README](README.md) for the user-facing feature list.
 
 ### v0.3 — Cluster & power features
 
 - [ ] **Cluster mode v1**: master/agent over SSH (mTLS opt-in fallback), pull sync, fleet status view
 - [ ] Cluster test-kit scenarios (partition, rollback-on-disconnect, drift)
 - [ ] **MCP server v1** — staging tools (`propose_change`, `apply_preset`), opt-in commit, sandbox mode
-- [ ] Caddy admin-API panel (read-only first, then write)
-- [ ] Docker chain awareness
-- [ ] OpenAPI spec + generated client
-- [ ] Named sets/maps editor (CIDR lists, country blocks)
-- [ ] Rate-limiting / connection-tracking rule helpers
-- [ ] Tailscale + WireGuard awareness
-- [ ] OIDC / `forward_auth`
+- [x] Caddy admin-API panel *(read-only: detect + bound-ports cross-check; write flow deferred to v0.4)*
+- [x] Docker chain awareness *(detection + dashboard pill; DOCKER-USER hand-off deferred)*
+- [x] OpenAPI spec *(shipped at `/openapi.yaml`; generated client TBD)*
+- [x] Named sets/maps editor (CIDR lists, country blocks)
+- [x] Rate-limiting / connection-tracking rule helpers *(SSH `rate_limit.per_minute`)*
+- [x] Tailscale + WireGuard awareness *(detect + SSH `interfaces:` pinning)*
+- [x] OIDC / `forward_auth` *(Caddyfile.example + docs/auth.md)*
 
 ### Later
 
@@ -409,7 +289,7 @@ The assistant proposes; the human commits. Always.
 
 ---
 
-## 11. Design decisions
+## 10. Design decisions
 
 All v1 design questions are locked. Concise reference; rationale lives in
 git history (`docs: lock all §11 design decisions`) and future ADRs under
@@ -431,7 +311,7 @@ git history (`docs: lock all §11 design decisions`) and future ADRs under
 
 ---
 
-## 12. Inspirations & prior art
+## 11. Inspirations & prior art
 
 - **firewalld** — zone model is nice; XML config is not.
 - **ufw** — simplicity goal; but CLI-only and iptables-era.
@@ -442,6 +322,6 @@ git history (`docs: lock all §11 design decisions`) and future ADRs under
 
 ---
 
-## 13. How to contribute to _this document_
+## 12. How to contribute to _this document_
 
 This file is the living design doc. PRs welcome. If you disagree with a design choice, open an issue with a "Decision proposal" — we'll discuss in the open and record the outcome in `docs/decisions/` (lightweight ADRs).

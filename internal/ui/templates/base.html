@@ -1,35 +1,42 @@
 {{define "base.html"}}<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{{.Title}} · Zeerak</title>
-  <link rel="stylesheet" href="/static/style.css">
-  {{if .Status.Pending}}<meta http-equiv="refresh" content="2">{{end}}
-</head>
-<body>
-  <header class="topbar">
-    <div class="container topbar-inner">
-      <a class="brand" href="/">zeerak</a>
-      <nav class="nav">
-        <a href="/">Dashboard</a>
-        <a href="/presets">Presets</a>
-        <a href="/ruleset">Ruleset</a>
-      </nav>
-      <div class="version">v{{.Version}}</div>
-    </div>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{.Title}} · Zeerak</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    {{if .Status.Pending}}
+    <meta http-equiv="refresh" content="2" />
+    {{end}}
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="brand" href="/">
+          <img class="brand-mark" src="/static/logo.svg" alt="" />
+          <span class="brand-name">Zeerak</span>
+        </a>
+        <nav class="nav">
+          <a href="/activity">Activity</a>
+        </nav>
+        <div class="version">v{{.Version}}</div>
+      </div>
+    </header>
 
-  <main class="container">
-    {{if .Flash}}<div class="banner banner-info">{{.Flash}}</div>{{end}}
-    {{if .Error}}<div class="banner banner-error">{{.Error}}</div>{{end}}
+    <main class="container">
+      {{if .Flash}}
+      <div class="banner banner-info">{{.Flash}}</div>
+      {{end}} {{if .Error}}
+      <div class="banner banner-error">{{.Error}}</div>
+      {{end}} {{block "body" .}}{{end}}
+    </main>
 
-    {{block "body" .}}{{end}}
-  </main>
-
-  <footer class="container footer">
-    <span>Zeerak — single-binary nftables panel · <a href="https://github.com/logicalangel/Zeerak">source</a></span>
-  </footer>
-</body>
+    <footer class="container footer">
+      <span
+        >Zeerak — single-binary nftables panel ·
+        <a href="https://github.com/logicalangel/Zeerak">source</a></span
+      >
+    </footer>
+  </body>
 </html>
 {{end}}

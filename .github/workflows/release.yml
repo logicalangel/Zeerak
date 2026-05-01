@@ -22,9 +22,9 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write    # publish GitHub Release
-  packages: write    # push to GHCR
-  id-token: write    # for cosign-keyless signing (future)
+  contents: write # publish GitHub Release
+  packages: write # push to GHCR
+  id-token: write # for cosign-keyless signing (future)
 
 jobs:
   goreleaser:
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0    # goreleaser needs full history for changelog
+          fetch-depth: 0 # goreleaser needs full history for changelog
 
       - uses: actions/setup-go@v5
         with:

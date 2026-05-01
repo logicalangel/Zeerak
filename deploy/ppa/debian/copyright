@@ -3,8 +3,8 @@ Upstream-Name: zeerak
 Upstream-Contact: logicalangel <noreply@github.com>
 Source: https://github.com/logicalangel/Zeerak
 
-Files: *
+Files: \*
 Copyright: 2025-2026 logicalangel
 License: Apache-2.0
- On Debian systems the full text of the Apache License 2.0 is available
- in /usr/share/common-licenses/Apache-2.0.
+On Debian systems the full text of the Apache License 2.0 is available
+in /usr/share/common-licenses/Apache-2.0.

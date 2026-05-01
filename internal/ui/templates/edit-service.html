@@ -1,0 +1,911 @@
+{{define "edit-service.html"}}{{template "base.html" .}}{{end}} {{define
+"body"}} {{$p := .Page}} {{$f := $p.Form}} {{$kind := $p.Kind}}
+
+<section class="es-head">
+  <a class="back-link" href="/">← Back</a>
+  <div class="es-title-row">
+    <span class="es-icon">{{template "icon" $p.Icon}}</span>
+    <div>
+      <h1>{{$p.Name}}</h1>
+      <p class="muted">{{$p.Subtitle}}</p>
+    </div>
+  </div>
+</section>
+
+<form method="post" action="/ui/presets/preview" class="es-form">
+  {{/* hidden inputs for OTHER services so they round-trip unchanged */}} {{if
+  ne $kind "protection"}}
+  <input
+    type="hidden"
+    name="default_deny_inbound"
+    value="{{if $f.DefaultDenyInbound}}on{{end}}"
+  />
+  {{end}} {{if ne $kind "ssh"}}
+  <input
+    type="hidden"
+    name="ssh_enabled"
+    value="{{if $f.SSHEnabled}}on{{end}}"
+  />
+  <input type="hidden" name="ssh_port" value="{{$f.SSHPort}}" />
+  <input type="hidden" name="ssh_from" value="{{$f.SSHFrom}}" />
+  <input type="hidden" name="ssh_interfaces" value="{{$f.SSHInterfaces}}" />
+  <input type="hidden" name="ssh_rate_limit" value="{{$f.SSHRateLimit}}" />
+  {{end}} {{if ne $kind "web"}}
+  <input type="hidden" name="caddy_box" value="{{if $f.CaddyBox}}on{{end}}" />
+  {{end}} {{if ne $kind "db"}}
+  <input type="hidden" name="db_enabled" value="{{if $f.DBEnabled}}on{{end}}" />
+  <input type="hidden" name="db_port" value="{{$f.DBPort}}" />
+  <input type="hidden" name="db_from" value="{{$f.DBFrom}}" />
+  {{end}} {{if ne $kind "mail"}}
+  <input type="hidden" name="mail_smtp" value="{{if $f.MailSMTP}}on{{end}}" />
+  <input
+    type="hidden"
+    name="mail_submission"
+    value="{{if $f.MailSubmission}}on{{end}}"
+  />
+  <input type="hidden" name="mail_imaps" value="{{if $f.MailIMAPS}}on{{end}}" />
+  <input type="hidden" name="mail_pop3s" value="{{if $f.MailPOP3S}}on{{end}}" />
+  {{end}} {{if ne $kind "outbound"}}
+  <input
+    type="hidden"
+    name="out_restrict"
+    value="{{if $f.OutRestrict}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_dns"
+    value="{{if $f.OutAllowDNS}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_http"
+    value="{{if $f.OutAllowHTTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_https"
+    value="{{if $f.OutAllowHTTPS}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_ntp"
+    value="{{if $f.OutAllowNTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_smtp"
+    value="{{if $f.OutAllowSMTP}}on{{end}}"
+  />
+  <input
+    type="hidden"
+    name="out_allow_ping"
+    value="{{if $f.OutAllowPing}}on{{end}}"
+  />
+  <input type="hidden" name="out_custom_tcp" value="{{$f.OutCustomTCP}}" />
+  <input type="hidden" name="out_block" value="{{$f.OutBlock}}" />
+  <input type="hidden" name="out_block_refs" value="{{$f.OutBlockRefs}}" />
+  <input type="hidden" name="block_sets_raw" value="{{$f.BlockSetsRaw}}" />
+  {{end}} {{if eq $kind "ssh"}}
+  <div class="es-flow" data-flow-for="ssh_audience">
+    <span class="flow-pill" data-flow-source>anyone</span>
+    <span class="flow-track">
+      <span class="flow-track-line"></span>
+      <span class="flow-track-label" data-flow-label="ssh"
+        >tcp {{if $f.SSHPort}}{{$f.SSHPort}}{{else}}22{{end}}</span
+      >
+      <span class="flow-track-arrow" aria-hidden="true">▶</span>
+    </span>
+    <span class="flow-pill flow-self">this machine</span>
+    <span class="flow-blocked">⛔ blocked — no inbound port open</span>
+  </div>
+  <fieldset class="audience" data-controls="ssh">
+    <legend class="sr-only">Who can connect to SSH</legend>
+    <label class="aud">
+      <input
+        type="radio"
+        name="ssh_audience"
+        value="off"
+        {{if
+        not
+        $f.SSHEnabled}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Nobody</strong><br /><span class="muted"
+          >SSH is off. Port stays closed.</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="ssh_audience"
+        value="any"
+        {{if
+        and
+        $f.SSHEnabled
+        (not
+        $f.SSHFrom)}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Anyone</strong><br /><span class="muted"
+          >Open from any network. Easy but exposed to brute-force.</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="ssh_audience"
+        value="restricted"
+        {{if
+        and
+        $f.SSHEnabled
+        $f.SSHFrom}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Only trusted networks</strong><br /><span class="muted"
+          >Recommended for production.</span
+        ></span
+      >
+    </label>
+  </fieldset>
+  <div
+    class="es-conditional"
+    data-show-when="ssh_audience"
+    data-show-values="any restricted"
+  >
+    <label class="field">
+      <span class="field-label"
+        >Port <span class="muted">(default 22)</span></span
+      >
+      <input
+        class="input small"
+        type="number"
+        name="ssh_port"
+        min="1"
+        max="65535"
+        value="{{if $f.SSHPort}}{{$f.SSHPort}}{{else}}22{{end}}"
+        data-port-label="ssh"
+      />
+    </label>
+  </div>
+  <div
+    class="es-conditional"
+    data-show-when="ssh_audience"
+    data-show-values="restricted"
+  >
+    <label class="field grow">
+      <span class="field-label">Trusted networks</span>
+      <span class="field-help muted"
+        >One CIDR per line. Anything not in this list will be dropped.</span
+      >
+      <textarea
+        class="input mono"
+        name="ssh_from"
+        rows="4"
+        placeholder="# Examples — replace with your own&#10;198.51.100.42/32&#10;10.0.0.0/8&#10;2001:db8::/32"
+      >
+{{$f.SSHFrom}}</textarea
+      >
+      <div class="hint-row">
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="ssh_from"
+          data-value="10.0.0.0/8"
+        >
+          + Private LAN (10/8)
+        </button>
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="ssh_from"
+          data-value="192.168.0.0/16"
+        >
+          + Home (192.168/16)
+        </button>
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="ssh_from"
+          data-value="172.16.0.0/12"
+        >
+          + Docker (172.16/12)
+        </button>
+      </div>
+    </label>
+  </div>
+  <details class="es-advanced">
+    <summary>Advanced — pin to interface, rate-limit</summary>
+    <label class="field">
+      <span class="field-label"
+        >Pin SSH to interface(s) <span class="muted">(optional)</span></span
+      >
+      <span class="field-help muted"
+        >Space- or comma-separated interface names. Limits SSH to traffic
+        arriving on these interfaces only — useful for tunnels like
+        <code>tailscale0</code> or <code>wg0</code>.</span
+      >
+      <input
+        class="input mono"
+        type="text"
+        name="ssh_interfaces"
+        value="{{$f.SSHInterfaces}}"
+        placeholder="tailscale0 wg0"
+      />
+      <div class="hint-row">
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="ssh_interfaces"
+          data-value="tailscale0"
+        >
+          + tailscale0
+        </button>
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="ssh_interfaces"
+          data-value="wg0"
+        >
+          + wg0
+        </button>
+      </div>
+    </label>
+    <label class="field">
+      <span class="field-label"
+        >Rate limit new connections <span class="muted">(0 = off)</span></span
+      >
+      <span class="field-help muted"
+        >Caps new SSH connections per source IP. Renders as an nftables
+        <code>meter</code> with <code>limit rate N/minute</code>.</span
+      >
+      <input
+        class="input small"
+        type="number"
+        min="0"
+        max="600"
+        name="ssh_rate_limit"
+        value="{{$f.SSHRateLimit}}"
+      />
+      <span class="muted">per minute</span>
+    </label>
+  </details>
+
+  {{else if eq $kind "web"}}
+  <div class="es-flow" data-flow-for="web_audience">
+    <span class="flow-pill" data-flow-source>anyone</span>
+    <span class="flow-track">
+      <span class="flow-track-line"></span>
+      <span class="flow-track-label">tcp 80, 443</span>
+      <span class="flow-track-arrow" aria-hidden="true">▶</span>
+    </span>
+    <span class="flow-pill flow-self">this machine</span>
+    <span class="flow-blocked">⛔ blocked — no inbound port open</span>
+  </div>
+  <fieldset class="audience">
+    <legend class="sr-only">Who can reach the website</legend>
+    <label class="aud">
+      <input
+        type="radio"
+        name="web_audience"
+        value="off"
+        {{if
+        not
+        $f.CaddyBox}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Nobody</strong><br /><span class="muted"
+          >No public website. Ports 80/443 stay closed.</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="web_audience"
+        value="any"
+        {{if
+        $f.CaddyBox}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Anyone</strong><br /><span class="muted"
+          >Open to the public internet (HTTP &amp; HTTPS).</span
+        ></span
+      >
+    </label>
+  </fieldset>
+
+  {{else if eq $kind "db"}}
+  <div class="es-flow" data-flow-for="db_audience">
+    <span class="flow-pill" data-flow-source>anyone</span>
+    <span class="flow-track">
+      <span class="flow-track-line"></span>
+      <span class="flow-track-label" data-flow-label="db"
+        >tcp {{if $f.DBPort}}{{$f.DBPort}}{{else}}5432{{end}}</span
+      >
+      <span class="flow-track-arrow" aria-hidden="true">▶</span>
+    </span>
+    <span class="flow-pill flow-self">this machine</span>
+    <span class="flow-blocked">⛔ blocked — no inbound port open</span>
+  </div>
+  <fieldset class="audience" data-controls="db">
+    <legend class="sr-only">Who can connect to the database</legend>
+    <label class="aud">
+      <input
+        type="radio"
+        name="db_audience"
+        value="off"
+        {{if
+        not
+        $f.DBEnabled}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Nobody</strong><br /><span class="muted"
+          >Database not reachable from outside.</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="db_audience"
+        value="any"
+        {{if
+        and
+        $f.DBEnabled
+        (not
+        $f.DBFrom)}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Anyone</strong><br /><span class="muted"
+          >Open to the internet (not recommended).</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="db_audience"
+        value="restricted"
+        {{if
+        and
+        $f.DBEnabled
+        $f.DBFrom}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Only trusted networks</strong><br /><span class="muted"
+          >Recommended.</span
+        ></span
+      >
+    </label>
+  </fieldset>
+  <div
+    class="es-conditional"
+    data-show-when="db_audience"
+    data-show-values="any restricted"
+  >
+    <label class="field">
+      <span class="field-label"
+        >Port
+        <span class="muted"
+          >(Postgres 5432 · MySQL 3306 · Mongo 27017)</span
+        ></span
+      >
+      <input
+        class="input small"
+        type="number"
+        name="db_port"
+        min="1"
+        max="65535"
+        value="{{if $f.DBPort}}{{$f.DBPort}}{{else}}5432{{end}}"
+        data-port-label="db"
+      />
+    </label>
+  </div>
+  <div
+    class="es-conditional"
+    data-show-when="db_audience"
+    data-show-values="restricted"
+  >
+    <label class="field grow">
+      <span class="field-label">Trusted networks</span>
+      <span class="field-help muted"
+        >One CIDR per line. Use <code>10.0.0.0/8</code> for private LANs,
+        <code>172.16.0.0/12</code> for Docker bridges, or a single host like
+        <code>198.51.100.42/32</code>.</span
+      >
+      <textarea
+        class="input mono"
+        name="db_from"
+        rows="4"
+        placeholder="# Examples — replace with your own&#10;10.0.0.0/8&#10;172.16.0.0/12&#10;2001:db8::/32"
+      >
+{{$f.DBFrom}}</textarea
+      >
+      <div class="hint-row">
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="db_from"
+          data-value="10.0.0.0/8"
+        >
+          + Private LAN (10/8)
+        </button>
+        <button
+          type="button"
+          class="hint-btn"
+          data-append="db_from"
+          data-value="172.16.0.0/12"
+        >
+          + Docker (172.16/12)
+        </button>
+      </div>
+    </label>
+  </div>
+
+  {{else if eq $kind "mail"}}
+  <div class="es-flow" data-flow-mail="1">
+    <span class="flow-pill">anyone</span>
+    <span class="flow-track">
+      <span class="flow-track-line"></span>
+      <span class="flow-track-label" data-flow-label="mail"
+        >tcp 25, 587, 993, 995</span
+      >
+      <span class="flow-track-arrow" aria-hidden="true">▶</span>
+    </span>
+    <span class="flow-pill flow-self">this machine</span>
+    <span
+      class="flow-blocked"
+      {{if
+      or
+      $f.MailSMTP
+      $f.MailSubmission
+      $f.MailIMAPS
+      $f.MailPOP3S}}hidden{{end}}
+      >⛔ all mail ports closed</span
+    >
+  </div>
+  <p class="muted es-help">
+    Pick which mail ports to open. Each is independent.
+  </p>
+  <div class="mail-grid">
+    <label class="check">
+      <input
+        type="checkbox"
+        name="mail_smtp"
+        {{if
+        $f.MailSMTP}}checked{{end}}
+      />
+      <span
+        ><strong>Receive mail (SMTP)</strong><br /><span class="muted"
+          >Server-to-server delivery.</span
+        ></span
+      >
+    </label>
+    <label class="check">
+      <input
+        type="checkbox"
+        name="mail_submission"
+        {{if
+        $f.MailSubmission}}checked{{end}}
+      />
+      <span
+        ><strong>Send from clients (Submission)</strong><br /><span
+          class="muted"
+          >For users sending mail through this server.</span
+        ></span
+      >
+    </label>
+    <label class="check">
+      <input
+        type="checkbox"
+        name="mail_imaps"
+        {{if
+        $f.MailIMAPS}}checked{{end}}
+      />
+      <span
+        ><strong>Read mail (IMAPS)</strong><br /><span class="muted"
+          >For mail clients reading inboxes.</span
+        ></span
+      >
+    </label>
+    <label class="check">
+      <input
+        type="checkbox"
+        name="mail_pop3s"
+        {{if
+        $f.MailPOP3S}}checked{{end}}
+      />
+      <span
+        ><strong>Download mail (POP3S)</strong><br /><span class="muted"
+          >For older mail clients.</span
+        ></span
+      >
+    </label>
+  </div>
+
+  {{else if eq $kind "protection"}}
+  <label class="check check-large">
+    <input
+      type="checkbox"
+      name="default_deny_inbound"
+      {{if
+      $f.DefaultDenyInbound}}checked{{end}}
+    />
+    <span
+      ><strong>Block everything else by default</strong><br /><span
+        class="muted"
+        >Recommended. Anything not explicitly opened above is dropped.</span
+      ></span
+    >
+  </label>
+
+  {{else if eq $kind "outbound"}}
+  <div class="es-flow es-flow-out" data-flow-out="1">
+    <span class="flow-pill flow-self">this machine</span>
+    <span class="flow-track flow-track-out">
+      <span class="flow-track-line"></span>
+      <span class="flow-track-label" data-flow-label="outbound"
+        >{{if $f.OutRestrict}}nothing{{else}}anything{{end}}</span
+      >
+      <span class="flow-track-arrow" aria-hidden="true">▶</span>
+    </span>
+    <span class="flow-pill">internet</span>
+  </div>
+
+  <fieldset class="audience">
+    <legend class="sr-only">Outbound mode</legend>
+    <label class="aud">
+      <input
+        type="radio"
+        name="out_mode"
+        value="open"
+        {{if
+        not
+        $f.OutRestrict}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Allow all outbound</strong><br /><span class="muted"
+          >Default. This machine can talk to anything. You can still block
+          specific destinations below.</span
+        ></span
+      >
+    </label>
+    <label class="aud">
+      <input
+        type="radio"
+        name="out_mode"
+        value="restrict"
+        {{if
+        $f.OutRestrict}}checked{{end}}
+      />
+      <span class="aud-label"
+        ><strong>Restrict outbound</strong><br /><span class="muted"
+          >Only the boxes you check below can leave the machine. Stops malware
+          from phoning home.</span
+        ></span
+      >
+    </label>
+  </fieldset>
+  <input
+    type="hidden"
+    name="out_restrict"
+    id="out-restrict-hidden"
+    value="{{if $f.OutRestrict}}on{{end}}"
+  />
+
+  <div
+    class="es-conditional"
+    data-show-when="out_mode"
+    data-show-values="restrict"
+  >
+    <fieldset class="out-services">
+      <legend class="field-label">Allowed services</legend>
+      <span class="field-help muted"
+        >Tick what this machine legitimately needs to send. <code>DNS</code> and
+        <code>NTP</code> are usually required for the OS to function.</span
+      >
+      <div class="out-grid">
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_dns"
+            {{if
+            $f.OutAllowDNS}}checked{{end}}
+          />
+          <span
+            ><strong>DNS</strong>
+            <span class="muted">udp/tcp 53 — name lookups</span></span
+          ></label
+        >
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_https"
+            {{if
+            $f.OutAllowHTTPS}}checked{{end}}
+          />
+          <span
+            ><strong>HTTPS</strong>
+            <span class="muted"
+              >tcp 443 — most web traffic, package mirrors</span
+            ></span
+          ></label
+        >
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_http"
+            {{if
+            $f.OutAllowHTTP}}checked{{end}}
+          />
+          <span
+            ><strong>HTTP</strong>
+            <span class="muted"
+              >tcp 80 — plain web, some package mirrors</span
+            ></span
+          ></label
+        >
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_ntp"
+            {{if
+            $f.OutAllowNTP}}checked{{end}}
+          />
+          <span
+            ><strong>NTP</strong>
+            <span class="muted">udp 123 — clock sync</span></span
+          ></label
+        >
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_smtp"
+            {{if
+            $f.OutAllowSMTP}}checked{{end}}
+          />
+          <span
+            ><strong>Send mail</strong>
+            <span class="muted">tcp 25, 465, 587 — outgoing email</span></span
+          ></label
+        >
+        <label class="check"
+          ><input
+            type="checkbox"
+            name="out_allow_ping"
+            {{if
+            $f.OutAllowPing}}checked{{end}}
+          />
+          <span
+            ><strong>Ping</strong>
+            <span class="muted">icmp echo — useful for diagnostics</span></span
+          ></label
+        >
+      </div>
+    </fieldset>
+
+    <label class="field grow">
+      <span class="field-label"
+        >Custom TCP ports <span class="muted">(optional)</span></span
+      >
+      <span class="field-help muted"
+        >One port per line or comma-separated, e.g. <code>2222</code> for git
+        over SSH, <code>5432</code> for an external Postgres.</span
+      >
+      <textarea
+        class="input mono"
+        name="out_custom_tcp"
+        rows="3"
+        placeholder="# Examples — replace with your own&#10;2222&#10;5432"
+      >
+{{$f.OutCustomTCP}}</textarea
+      >
+    </label>
+  </div>
+
+  <label class="field grow">
+    <span class="field-label"
+      >Block destinations
+      <span class="muted">(applies in both modes)</span></span
+    >
+    <span class="field-help muted"
+      >CIDRs this machine must not contact, one per line. Useful for blocking
+      known-bad networks or accidentally exposing a private network.</span
+    >
+    <textarea
+      class="input mono"
+      name="out_block"
+      rows="3"
+      placeholder="# Examples — replace with your own&#10;192.0.2.0/24&#10;2001:db8::/32"
+    >
+{{$f.OutBlock}}</textarea
+    >
+  </label>
+  <details class="es-advanced">
+    <summary>
+      Named block sets <span class="muted">(reusable CIDR lists)</span>
+    </summary>
+    <label class="field grow">
+      <span class="field-label">Block-set definitions</span>
+      <span class="field-help muted"
+        >One <code>name CIDR</code> per line. Repeated names accumulate into one
+        set; family is inferred from the CIDR. Render as nftables
+        <code>set</code> objects you can reference below.</span
+      >
+      <textarea
+        class="input mono"
+        name="block_sets_raw"
+        rows="5"
+        placeholder="# Example&#10;tor 1.2.3.0/24&#10;tor 5.6.7.0/24&#10;spam-v6 2001:db8::/32"
+      >
+{{$f.BlockSetsRaw}}</textarea
+      >
+    </label>
+    <label class="field grow">
+      <span class="field-label">Block by set name</span>
+      <span class="field-help muted"
+        >Space- or comma-separated set names declared above. Each becomes
+        <code>ip[6] daddr @name drop</code>.</span
+      >
+      <input
+        class="input mono"
+        type="text"
+        name="out_block_refs"
+        value="{{$f.OutBlockRefs}}"
+        placeholder="tor spam-v6"
+      />
+    </label>
+  </details>
+  {{end}}
+
+  <div class="es-actions">
+    <button class="btn btn-primary" type="submit">Review changes</button>
+    <a class="btn btn-ghost" href="/">Cancel</a>
+  </div>
+  {{if and (ne $kind "protection") (ne $kind "outbound")}}
+  <p class="es-direction-note muted">
+    <strong>Inbound only.</strong> This page configures who can reach
+    <em>into</em> this machine. To control what this machine can
+    <em>send out</em>, see <a href="/edit/outbound">Outbound traffic</a>.
+  </p>
+  {{end}}
+</form>
+
+<script>
+  (function () {
+    // Progressive disclosure: hide .es-conditional sections unless the
+    // controlling radio's value is in data-show-values.
+    function sync() {
+      document.querySelectorAll(".es-conditional").forEach(function (el) {
+        var name = el.dataset.showWhen;
+        var values = (el.dataset.showValues || "").split(/\s+/);
+        var picked = document.querySelector(
+          'input[name="' + name + '"]:checked',
+        );
+        var show = picked && values.indexOf(picked.value) !== -1;
+        el.classList.toggle("is-hidden", !show);
+      });
+    }
+    // Outbound page: keep hidden out_restrict in sync with the radio + flow strip.
+    function syncOutbound() {
+      var picked = document.querySelector('input[name="out_mode"]:checked');
+      var hidden = document.getElementById("out-restrict-hidden");
+      if (!picked || !hidden) return;
+      var restrict = picked.value === "restrict";
+      hidden.value = restrict ? "on" : "";
+      var label = document.querySelector('[data-flow-label="outbound"]');
+      if (label) {
+        if (!restrict) {
+          label.textContent = "anything";
+        } else {
+          var parts = [];
+          if (q("out_allow_dns")) parts.push("dns");
+          if (q("out_allow_https")) parts.push("https");
+          if (q("out_allow_http")) parts.push("http");
+          if (q("out_allow_ntp")) parts.push("ntp");
+          if (q("out_allow_smtp")) parts.push("smtp");
+          if (q("out_allow_ping")) parts.push("ping");
+          var customN = (
+            document.querySelector('textarea[name="out_custom_tcp"]') || {
+              value: "",
+            }
+          ).value
+            .split(/[\n,\s]+/)
+            .filter(function (s) {
+              return s.trim();
+            }).length;
+          if (customN) parts.push(customN + " custom");
+          label.textContent = parts.length ? parts.join(", ") : "nothing";
+        }
+      }
+    }
+    function q(name) {
+      var el = document.querySelector('input[name="' + name + '"]');
+      return !!(el && el.checked);
+    }
+
+    // Flow strip: dim the line + show "blocked" pill when audience=off,
+    // and update source pill + transport label from current form values.
+    function syncFlow() {
+      document
+        .querySelectorAll(".es-flow[data-flow-for]")
+        .forEach(function (el) {
+          var picked = document.querySelector(
+            'input[name="' + el.dataset.flowFor + '"]:checked',
+          );
+          var off = !picked || picked.value === "off";
+          el.classList.toggle("is-blocked", off);
+          var src = el.querySelector("[data-flow-source]");
+          if (src && picked) {
+            src.textContent =
+              {
+                off: "nobody",
+                any: "anyone",
+                restricted: "trusted networks",
+              }[picked.value] || "anyone";
+          }
+        });
+      // Live transport labels for SSH/DB ports.
+      document
+        .querySelectorAll("input[data-port-label]")
+        .forEach(function (input) {
+          var lbl = document.querySelector(
+            '[data-flow-label="' + input.dataset.portLabel + '"]',
+          );
+          if (lbl) lbl.textContent = "tcp " + (input.value || "?");
+        });
+      // Mail: build label from active checkboxes.
+      var mailFlow = document.querySelector(".es-flow[data-flow-mail]");
+      if (mailFlow) {
+        var ports = [];
+        if (q("mail_smtp")) ports.push("25");
+        if (q("mail_submission")) ports.push("587");
+        if (q("mail_imaps")) ports.push("993");
+        if (q("mail_pop3s")) ports.push("995");
+        var lbl = mailFlow.querySelector('[data-flow-label="mail"]');
+        if (lbl)
+          lbl.textContent = ports.length ? "tcp " + ports.join(", ") : "\u2014";
+        var blocked = mailFlow.querySelector(".flow-blocked");
+        if (blocked) blocked.hidden = ports.length > 0;
+        mailFlow.classList.toggle("is-blocked", ports.length === 0);
+      }
+    }
+    document
+      .querySelectorAll(
+        "input[type=radio], input[type=checkbox], input[type=number], textarea",
+      )
+      .forEach(function (r) {
+        r.addEventListener("input", function () {
+          sync();
+          syncFlow();
+          syncOutbound();
+        });
+        r.addEventListener("change", function () {
+          sync();
+          syncFlow();
+          syncOutbound();
+        });
+      });
+    sync();
+    syncFlow();
+    syncOutbound();
+
+    // CIDR quick-add buttons.
+    document.querySelectorAll(".hint-btn[data-append]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var ta = document.querySelector(
+          'textarea[name="' + btn.dataset.append + '"]',
+        );
+        if (!ta) return;
+        var val = btn.dataset.value;
+        var cur = ta.value.trim();
+        if (cur.split(/\n/).indexOf(val) !== -1) return;
+        ta.value = cur ? cur + "\n" + val : val;
+        ta.focus();
+      });
+    });
+  })();
+</script>
+{{end}}

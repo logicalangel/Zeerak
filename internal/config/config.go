@@ -45,7 +45,7 @@ type Config struct {
 
 // Server holds daemon-level knobs.
 type Server struct {
-	Listen          string `yaml:"listen,omitempty"`           // default 127.0.0.1:7878
+	Listen          string `yaml:"listen,omitempty"`           // default 127.0.0.1:17878
 	Socket          string `yaml:"socket,omitempty"`           // default /run/zeerak/zeerak.sock
 	RollbackSeconds int    `yaml:"rollback_seconds,omitempty"` // default 60
 }

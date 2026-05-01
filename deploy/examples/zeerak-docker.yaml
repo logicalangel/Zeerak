@@ -1,8 +1,7 @@
-# Zeerak example config — minimal "Caddy box" preset.
+# Zeerak Docker compose config.
 #
-# This is the hand-edited file (loaded from /etc/zeerak/zeerak.yaml).
-# UI/API edits are stored separately in /var/lib/zeerak/autosave.yaml.
-# See VISION.md §11 Q3.
+# This keeps the example firewall posture, but also allows the local
+# panel/API port published by docker compose for browser access.
 version: 1
 
 server:
@@ -28,3 +27,5 @@ tables:
             comment: ssh
           - expr: tcp dport { 80, 443 } accept
             comment: caddy
+          - expr: tcp dport 17878 accept
+            comment: panel

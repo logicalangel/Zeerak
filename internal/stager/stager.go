@@ -78,6 +78,7 @@ type Stager struct {
 	applier Applier
 	timeout time.Duration
 	now     func() time.Time // injectable clock for tests
+	onAutoRevert func()    // optional; called after auto-revert completes
 
 	mu        sync.Mutex
 	state     State
@@ -99,6 +100,13 @@ func WithTimeout(d time.Duration) Option {
 // WithClock injects a clock (test hook).
 func WithClock(now func() time.Time) Option {
 	return func(s *Stager) { s.now = now }
+}
+
+// WithOnAutoRevert installs a callback fired AFTER an auto-revert (timer
+// expiry) finishes. The callback runs in the timer goroutine and must not
+// block; UI code uses it to append an activity-log entry.
+func WithOnAutoRevert(fn func()) Option {
+	return func(s *Stager) { s.onAutoRevert = fn }
 }
 
 // New returns a Stager backed by applier.
@@ -224,7 +232,11 @@ func (s *Stager) fireTimeout(ctx context.Context) {
 	s.state = StateRolledBack
 	s.snapshot = nil
 	s.candidate = nil
+	cb := s.onAutoRevert
 	s.mu.Unlock()
+	if cb != nil {
+		go cb()
+	}
 }
 
 func (s *Stager) stopTimerLocked() {

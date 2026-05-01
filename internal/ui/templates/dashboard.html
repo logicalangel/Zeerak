@@ -1,37 +1,140 @@
 {{define "dashboard.html"}}{{template "base.html" .}}{{end}}
 
+{{/* service-card: one tile in the dashboard grid.
+     Visual contract:
+       - Pills = entities (status + audience).
+       - Flow line = transport. Ports/protocols sit as a single label on
+         the arrow, never as a row of pills. */}}
+{{define "service-card"}}
+<a class="service-card service-{{.Status}}" href="/edit/{{.Key}}">
+  <div class="service-card-top">
+    <span class="service-icon" aria-hidden="true">{{template "icon" .Icon}}</span>
+    <span class="service-pill pill-{{.Status}}">{{.Status}}</span>
+  </div>
+  <h3 class="service-name">{{.Name}}</h3>
+  <p class="service-sub muted">{{.Subtitle}}</p>
+  {{if .FlowLabel}}
+    <div class="flow-line flow-line-{{.FlowDir}}" aria-label="{{if eq .FlowDir "out"}}outbound{{else}}inbound{{end}} {{.FlowLabel}}">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="flow-track-label">{{.FlowLabel}}</span>
+      <span class="flow-arrowhead" aria-hidden="true">{{if eq .FlowDir "out"}}▶{{else}}▶{{end}}</span>
+    </div>
+  {{else}}
+    <div class="flow-line flow-line-empty"><span class="muted">No traffic</span></div>
+  {{end}}
+  <span class="service-edit">Edit →</span>
+</a>
+{{end}}
+
 {{define "body"}}
-<section class="card">
-  <header class="card-header">
-    <h1>Status</h1>
-    <span class="badge badge-{{if .Status.Pending}}warn{{else if eq .Status.State "Confirmed"}}ok{{else}}muted{{end}}">{{.Status.State}}</span>
+{{$page := .Page}}
+{{$pending := .Status.Pending}}
+
+{{if $pending}}
+<section class="staged-banner">
+  <div class="staged-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+  </div>
+  <div class="staged-text">
+    <strong>A change is staged.</strong>
+    <span>Reverting in <strong>{{untilSeconds .Status.Deadline}}s</strong> unless you confirm.</span>
+  </div>
+  <div class="staged-actions">
+    <form method="post" action="/ui/confirm" class="inline-form">
+      <button class="btn btn-primary" type="submit">Confirm</button>
+    </form>
+    <form method="post" action="/ui/rollback" class="inline-form">
+      <button class="btn btn-ghost" type="submit">Revert now</button>
+    </form>
+  </div>
+</section>
+{{end}}
+
+<section class="hero">
+  <div class="hero-status">
+    <span class="pulse-dot pulse-{{if $pending}}warn{{else}}ok{{end}}" aria-hidden="true"><span class="pulse-ring"></span></span>
+    <div>
+      <h1 class="hero-title">{{if $pending}}A change is pending{{else}}This machine is protected{{end}}</h1>
+      <p class="hero-sub muted">{{$page.Defense.Headline}} {{$page.Defense.Detail}}</p>
+    </div>
+  </div>
+  <div class="hero-meta">
+    <span class="chip chip-ok">{{$page.Counts.Open}} open</span>
+    {{if $page.Counts.Restricted}}<span class="chip chip-info">{{$page.Counts.Restricted}} restricted</span>{{end}}
+    <span class="chip chip-muted">{{$page.Counts.Blocked}} blocked</span>
+  </div>
+</section>
+
+<section class="services">
+  <header class="services-header">
+    <div>
+      <h2>Incoming traffic</h2>
+      <p class="muted">Who can reach this machine.</p>
+    </div>
+    <a class="btn btn-primary" href="/presets">+ Add or change</a>
   </header>
-  <div class="card-body">
-    {{if .Status.Pending}}
-      <p>A change is staged. It will roll back automatically in <strong>{{untilSeconds .Status.Deadline}}s</strong> unless confirmed.</p>
-      <form method="post" action="/ui/confirm" class="inline-form">
-        <button class="btn btn-primary" type="submit">Confirm — keep changes</button>
-      </form>
-      <form method="post" action="/ui/rollback" class="inline-form">
-        <button class="btn btn-danger" type="submit">Rollback now</button>
-      </form>
-    {{else}}
-      <p class="muted">No pending change. The currently running ruleset is the last confirmed one.</p>
+
+  <div class="service-grid">
+    {{range $page.Cards}}
+      {{if ne .Key "outbound"}}{{template "service-card" .}}{{end}}
     {{end}}
   </div>
 </section>
 
-<section class="card">
-  <header class="card-header"><h2>Quick actions</h2></header>
-  <div class="card-body grid-2">
-    <a class="tile" href="/presets">
-      <h3>Apply a preset</h3>
-      <p class="muted">SSH allowlist, default-deny, Caddy box. Diff-preview before staging.</p>
-    </a>
-    <a class="tile" href="/ruleset">
-      <h3>View live ruleset</h3>
-      <p class="muted">Read-only view of <code>nft list ruleset</code>.</p>
-    </a>
+<section class="services">
+  <header class="services-header">
+    <div>
+      <h2>Outgoing traffic</h2>
+      <p class="muted">What this machine can talk to.</p>
+    </div>
+  </header>
+
+  <div class="service-grid service-grid-out">
+    {{range $page.Cards}}
+      {{if eq .Key "outbound"}}{{template "service-card" .}}{{end}}
+    {{end}}
   </div>
 </section>
+
+{{with $page.Integrations}}
+{{if or .Tailscale.Detected .WireGuard.Detected .Docker.Detected .Caddy.Detected}}
+<section class="services-section integrations-section">
+  <header class="services-header">
+    <div>
+      <h2>Detected on this host</h2>
+      <p class="muted">Awareness only — Zeerak doesn&rsquo;t auto-firewall these.</p>
+    </div>
+  </header>
+  <div class="integrations-row">
+    {{if .Tailscale.Detected}}
+      <span class="chip chip-info" title="Tailscale interface(s): {{range $i,$n := .Tailscale.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}">Tailscale: {{range $i,$n := .Tailscale.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
+    {{end}}
+    {{if .WireGuard.Detected}}
+      <span class="chip chip-info" title="WireGuard interface(s)">WireGuard: {{range $i,$n := .WireGuard.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
+    {{end}}
+    {{if .Docker.Detected}}
+      <span class="chip chip-warn" title="Docker chains present in {{range $i,$t := .Docker.Tables}}{{if $i}}, {{end}}{{$t}}{{end}}">Docker detected{{if .Docker.HasDockerUser}} (DOCKER-USER chain found){{end}}</span>
+    {{end}}
+    {{if .Caddy.Detected}}
+      {{$ports := .Caddy.Ports}}
+      <span class="chip chip-info" title="Caddy admin API at {{.Caddy.AdminURL}}">Caddy{{if $ports}}: {{range $i,$p := $ports}}{{if $i}}, {{end}}:{{$p}}{{end}}{{end}}</span>
+    {{end}}
+  </div>
+  {{if .CaddyPortGaps}}
+  <p class="chip chip-warn" style="margin-top:0.5rem;">Caddy is listening on {{range $i,$p := .CaddyPortGaps}}{{if $i}}, {{end}}:{{$p}}{{end}} but the firewall doesn&rsquo;t allow {{if eq (len .CaddyPortGaps) 1}}it{{else}}them{{end}} inbound. Add a matching preset or rule.</p>
+  {{end}}
+  <p class="muted small">Tip: pin SSH to your tunnel with <code>presets.ssh.interfaces: [tailscale0]</code>. Docker integration (DOCKER-USER hand-off) lands in v0.4.</p>
+</section>
+{{end}}
+{{end}}
+
+<details class="tech-disclosure">
+  <summary>Show technical view</summary>
+  <p class="muted">Raw output of <code>nft list ruleset</code>. For operators who want to verify what was applied to the kernel.</p>
+  {{if $page.Live}}
+    <pre class="pre">{{$page.Live}}</pre>
+  {{else}}
+    <p class="muted">Empty ruleset.</p>
+  {{end}}
+</details>
 {{end}}
