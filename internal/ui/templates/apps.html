@@ -1,106 +1,169 @@
-{{define "apps.html"}}{{template "base.html" .}}{{end}}
-
-{{define "body"}}
-{{$p := .Page}}
+{{define "apps.html"}}{{template "base.html" .}}{{end}} {{define "body"}} {{$p
+:= .Page}}
 <section class="page-head">
   <h1>Apps on this host</h1>
-  <p class="muted">Software Zeerak detected. Awareness only — Zeerak doesn&rsquo;t auto-modify their firewall rules.</p>
+  <p class="muted">
+    Software Zeerak detected. Awareness only — Zeerak doesn&rsquo;t auto-modify
+    their firewall rules.
+  </p>
 </section>
 
 <div class="service-grid">
-
   {{/* ── Tailscale ─────────────────────────────────────────────────────── */}}
-  <div class="service-card{{if $p.Tailscale.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}">
+  <div
+    class="service-card{{if $p.Tailscale.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}"
+  >
     <div class="service-card-top">
-      <span class="service-icon" aria-hidden="true">{{template "icon" "network"}}</span>
-      <span class="service-pill {{if $p.Tailscale.Detected}}pill-open{{else}}pill-blocked{{end}}">
+      <span class="service-icon" aria-hidden="true"
+        >{{template "icon" "network"}}</span
+      >
+      <span
+        class="service-pill {{if $p.Tailscale.Detected}}pill-open{{else}}pill-blocked{{end}}"
+      >
         {{if $p.Tailscale.Detected}}detected{{else}}not found{{end}}
       </span>
     </div>
     <h3 class="service-name">Tailscale</h3>
-    <p class="service-sub muted">Mesh VPN — connects devices across the internet</p>
+    <p class="service-sub muted">
+      Mesh VPN — connects devices across the internet
+    </p>
     {{if $p.Tailscale.Detected}}
-      <div class="flow-line flow-line-in">
-        <span class="flow-track" aria-hidden="true"></span>
-        <span class="flow-track-label">{{range $i,$n := $p.Tailscale.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
-        <span class="flow-arrowhead" aria-hidden="true">▶</span>
-      </div>
+    <div class="flow-line flow-line-in">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="flow-track-label"
+        >{{range $i,$n := $p.Tailscale.Interfaces}}{{if $i}},
+        {{end}}{{$n}}{{end}}</span
+      >
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{else}}
-      <div class="flow-line flow-line-empty"><span class="muted">No tunnel interfaces</span></div>
+    <div class="flow-line flow-line-empty">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="muted">No tunnel interfaces</span>
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{end}}
   </div>
 
   {{/* ── WireGuard ────────────────────────────────────────────────────── */}}
-  <div class="service-card{{if $p.WireGuard.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}">
+  <div
+    class="service-card{{if $p.WireGuard.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}"
+  >
     <div class="service-card-top">
-      <span class="service-icon" aria-hidden="true">{{template "icon" "lock"}}</span>
-      <span class="service-pill {{if $p.WireGuard.Detected}}pill-open{{else}}pill-blocked{{end}}">
+      <span class="service-icon" aria-hidden="true"
+        >{{template "icon" "lock"}}</span
+      >
+      <span
+        class="service-pill {{if $p.WireGuard.Detected}}pill-open{{else}}pill-blocked{{end}}"
+      >
         {{if $p.WireGuard.Detected}}detected{{else}}not found{{end}}
       </span>
     </div>
     <h3 class="service-name">WireGuard</h3>
-    <p class="service-sub muted">VPN protocol — encrypted peer-to-peer tunnels</p>
+    <p class="service-sub muted">
+      VPN protocol — encrypted peer-to-peer tunnels
+    </p>
     {{if $p.WireGuard.Detected}}
-      <div class="flow-line flow-line-in">
-        <span class="flow-track" aria-hidden="true"></span>
-        <span class="flow-track-label">{{range $i,$n := $p.WireGuard.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
-        <span class="flow-arrowhead" aria-hidden="true">▶</span>
-      </div>
+    <div class="flow-line flow-line-in">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="flow-track-label"
+        >{{range $i,$n := $p.WireGuard.Interfaces}}{{if $i}},
+        {{end}}{{$n}}{{end}}</span
+      >
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{else}}
-      <div class="flow-line flow-line-empty"><span class="muted">No tunnel interfaces</span></div>
+    <div class="flow-line flow-line-empty">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="muted">No tunnel interfaces</span>
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{end}}
   </div>
 
   {{/* ── Docker ───────────────────────────────────────────────────────── */}}
-  <div class="service-card{{if $p.Docker.Detected}} service-restricted{{else}} service-blocked service-card-soft{{end}}">
+  <div
+    class="service-card{{if $p.Docker.Detected}} service-restricted{{else}} service-blocked service-card-soft{{end}}"
+  >
     <div class="service-card-top">
-      <span class="service-icon" aria-hidden="true">{{template "icon" "box"}}</span>
-      <span class="service-pill {{if $p.Docker.Detected}}pill-restricted{{else}}pill-blocked{{end}}">
+      <span class="service-icon" aria-hidden="true"
+        >{{template "icon" "box"}}</span
+      >
+      <span
+        class="service-pill {{if $p.Docker.Detected}}pill-restricted{{else}}pill-blocked{{end}}"
+      >
         {{if $p.Docker.Detected}}detected{{else}}not found{{end}}
       </span>
     </div>
     <h3 class="service-name">Docker</h3>
-    <p class="service-sub muted">Container runtime — manages its own nftables chains</p>
+    <p class="service-sub muted">
+      Container runtime — manages its own nftables chains
+    </p>
     {{if $p.Docker.Detected}}
-      <div class="flow-line flow-line-out">
-        <span class="flow-track" aria-hidden="true"></span>
-        <span class="flow-track-label">{{if $p.Docker.HasDockerUser}}DOCKER-USER ✓{{else}}no DOCKER-USER{{end}}</span>
-        <span class="flow-arrowhead" aria-hidden="true">▶</span>
-      </div>
+    <div class="flow-line flow-line-out">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="flow-track-label"
+        >{{if $p.Docker.HasDockerUser}}DOCKER-USER ✓{{else}}no
+        DOCKER-USER{{end}}</span
+      >
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{else}}
-      <div class="flow-line flow-line-empty"><span class="muted">Not running</span></div>
+    <div class="flow-line flow-line-empty">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="muted">Not running</span>
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{end}}
   </div>
 
   {{/* ── Caddy ────────────────────────────────────────────────────────── */}}
-  <div class="service-card{{if $p.Caddy.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}">
+  <div
+    class="service-card{{if $p.Caddy.Detected}} service-open{{else}} service-blocked service-card-soft{{end}}"
+  >
     <div class="service-card-top">
-      <span class="service-icon" aria-hidden="true">{{template "icon" "globe"}}</span>
-      <span class="service-pill {{if $p.Caddy.Detected}}pill-open{{else}}pill-blocked{{end}}">
+      <span class="service-icon" aria-hidden="true"
+        >{{template "icon" "globe"}}</span
+      >
+      <span
+        class="service-pill {{if $p.Caddy.Detected}}pill-open{{else}}pill-blocked{{end}}"
+      >
         {{if $p.Caddy.Detected}}detected{{else}}not found{{end}}
       </span>
     </div>
     <h3 class="service-name">Caddy</h3>
     <p class="service-sub muted">Web server and reverse proxy</p>
     {{if $p.Caddy.Detected}}
-      <div class="flow-line flow-line-in">
-        <span class="flow-track" aria-hidden="true"></span>
-        <span class="flow-track-label">{{range $i,$s := $p.Caddy.Sites}}{{if $i}} · {{end}}:{{$s.Port}}{{end}}{{if not $p.Caddy.Sites}}active{{end}}</span>
-        <span class="flow-arrowhead" aria-hidden="true">▶</span>
-      </div>
+    <div class="flow-line flow-line-in">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="flow-track-label"
+        >{{range $i,$s := $p.Caddy.Sites}}{{if $i}} ·
+        {{end}}:{{$s.Port}}{{end}}{{if not $p.Caddy.Sites}}active{{end}}</span
+      >
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{else}}
-      <div class="flow-line flow-line-empty"><span class="muted">Admin API not reachable</span></div>
+    <div class="flow-line flow-line-empty">
+      <span class="flow-track" aria-hidden="true"></span>
+      <span class="muted">Admin API not reachable</span>
+      <span class="flow-arrowhead" aria-hidden="true">▶</span>
+    </div>
     {{end}}
   </div>
-
 </div>
 
 {{if $p.CaddyPortGaps}}
-<div class="banner banner-error" style="margin-top:1.5rem;">
-  Caddy is listening on {{range $i,$port := $p.CaddyPortGaps}}{{if $i}}, {{end}}:{{$port}}{{end}} but the firewall doesn&rsquo;t allow {{if eq (len $p.CaddyPortGaps) 1}}it{{else}}them{{end}} inbound.
+<div class="banner banner-error" style="margin-top: 1.5rem">
+  Caddy is listening on {{range $i,$port := $p.CaddyPortGaps}}{{if $i}},
+  {{end}}:{{$port}}{{end}} but the firewall doesn&rsquo;t allow {{if eq (len
+  $p.CaddyPortGaps) 1}}it{{else}}them{{end}} inbound.
   <a href="/edit/web">Add a web preset</a> or adjust your rules.
 </div>
 {{end}}
 
-<p class="muted small" style="margin-top:1.5rem;">Tip: pin SSH to your tunnel with <code>presets.ssh.interfaces: [tailscale0]</code>. Docker integration (DOCKER-USER hand-off) lands in v0.4.</p>
+<p class="muted small" style="margin-top: 1.5rem">
+  Tip: pin SSH to your tunnel with
+  <code>presets.ssh.interfaces: [tailscale0]</code>. Docker integration
+  (DOCKER-USER hand-off) lands in v0.4.
+</p>
 {{end}}
