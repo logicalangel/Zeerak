@@ -536,9 +536,36 @@ func TestUI_Dashboard(t *testing.T) {
 		t.Fatalf("dashboard: got %d", r.StatusCode)
 	}
 	body := readBody(t, r)
-	for _, want := range []string{"<title>", "Incoming traffic", "Add or change", "NAT"} {
+	for _, want := range []string{"<title>", "Incoming traffic", "Add or change", "NAT", `href="/apps"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
+		}
+	}
+	// Integrations section must have moved to /apps.
+	if strings.Contains(body, "Detected on this host") {
+		t.Error("dashboard must not contain 'Detected on this host' (moved to /apps)")
+	}
+}
+
+func TestUI_AppsPage(t *testing.T) {
+	ts := newTestServer(t)
+	r := ts.get(t, "/apps")
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("/apps: got %d", r.StatusCode)
+	}
+	body := readBody(t, r)
+	for _, want := range []string{
+		"Apps on this host",
+		"Tailscale",
+		"WireGuard",
+		"Docker",
+		"Caddy",
+		`class="service-card`,
+		"flow-arrowhead",
+		"▶",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/apps missing %q", want)
 		}
 	}
 }

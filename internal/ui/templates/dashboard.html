@@ -96,38 +96,6 @@
   </div>
 </section>
 
-{{with $page.Integrations}}
-{{if or .Tailscale.Detected .WireGuard.Detected .Docker.Detected .Caddy.Detected}}
-<section class="services-section integrations-section">
-  <header class="services-header">
-    <div>
-      <h2>Detected on this host</h2>
-      <p class="muted">Awareness only — Zeerak doesn&rsquo;t auto-firewall these.</p>
-    </div>
-  </header>
-  <div class="integrations-row">
-    {{if .Tailscale.Detected}}
-      <span class="chip chip-info" title="Tailscale interface(s): {{range $i,$n := .Tailscale.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}">Tailscale: {{range $i,$n := .Tailscale.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
-    {{end}}
-    {{if .WireGuard.Detected}}
-      <span class="chip chip-info" title="WireGuard interface(s)">WireGuard: {{range $i,$n := .WireGuard.Interfaces}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
-    {{end}}
-    {{if .Docker.Detected}}
-      <span class="chip chip-warn" title="Docker chains present in {{range $i,$t := .Docker.Tables}}{{if $i}}, {{end}}{{$t}}{{end}}">Docker detected{{if .Docker.HasDockerUser}} (DOCKER-USER chain found){{end}}</span>
-    {{end}}
-    {{if .Caddy.Detected}}
-      {{$ports := .Caddy.Ports}}
-      <span class="chip chip-info" title="Caddy admin API at {{.Caddy.AdminURL}}">Caddy{{if $ports}}: {{range $i,$p := $ports}}{{if $i}}, {{end}}:{{$p}}{{end}}{{end}}</span>
-    {{end}}
-  </div>
-  {{if .CaddyPortGaps}}
-  <p class="chip chip-warn" style="margin-top:0.5rem;">Caddy is listening on {{range $i,$p := .CaddyPortGaps}}{{if $i}}, {{end}}:{{$p}}{{end}} but the firewall doesn&rsquo;t allow {{if eq (len .CaddyPortGaps) 1}}it{{else}}them{{end}} inbound. Add a matching preset or rule.</p>
-  {{end}}
-  <p class="muted small">Tip: pin SSH to your tunnel with <code>presets.ssh.interfaces: [tailscale0]</code>. Docker integration (DOCKER-USER hand-off) lands in v0.4.</p>
-</section>
-{{end}}
-{{end}}
-
 <details class="tech-disclosure">
   <summary>Show technical view</summary>
   <p class="muted">Raw output of <code>nft list ruleset</code>. For operators who want to verify what was applied to the kernel.</p>

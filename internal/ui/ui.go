@@ -183,7 +183,7 @@ func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string)
 			return t.Local().Format("2006-01-02 15:04")
 		},
 	}
-	pages := []string{"dashboard", "ruleset", "presets", "preview", "error", "activity", "edit-service"}
+	pages := []string{"dashboard", "ruleset", "presets", "preview", "error", "activity", "edit-service", "apps"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, p := range pages {
 		t, err := template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/base.html", "templates/_icons.html", "templates/"+p+".html")
@@ -210,6 +210,7 @@ func New(stg *stager.Stager, reader Reader, logger *slog.Logger, version string)
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.dashboard)
 	mux.HandleFunc("GET /activity", h.activityPage)
+	mux.HandleFunc("GET /apps", h.appsPage)
 	mux.HandleFunc("GET /ruleset", h.ruleset)
 	mux.HandleFunc("GET /presets", h.presetsPicker)
 	mux.HandleFunc("GET /edit/{kind}", h.editService)
@@ -269,11 +270,10 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "dashboard.html", baseData{
 		Title: "Zeerak",
 		Page: map[string]any{
-			"Cards":        cards,
-			"Live":         live,
-			"Defense":      defenseSummary(h.currentPresets()),
-			"Counts":       counts,
-			"Integrations": detectIntegrations(r.Context(), h.reader, h.currentPresets()),
+			"Cards":   cards,
+			"Live":    live,
+			"Defense": defenseSummary(h.currentPresets()),
+			"Counts":  counts,
 		},
 	})
 }
@@ -305,6 +305,13 @@ func (h *Handler) activityPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "activity.html", baseData{
 		Title: "Activity",
 		Page:  map[string]any{"Events": events, "HasLog": a != nil},
+	})
+}
+
+func (h *Handler) appsPage(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "apps.html", baseData{
+		Title: "Apps",
+		Page:  detectIntegrations(r.Context(), h.reader, h.currentPresets()),
 	})
 }
 
