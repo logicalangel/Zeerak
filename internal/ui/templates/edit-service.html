@@ -85,7 +85,24 @@
   <input type="hidden" name="out_block" value="{{$f.OutBlock}}" />
   <input type="hidden" name="out_block_refs" value="{{$f.OutBlockRefs}}" />
   <input type="hidden" name="block_sets_raw" value="{{$f.BlockSetsRaw}}" />
-  {{end}} {{if eq $kind "ssh"}}
+  {{end}}
+  {{/* v0.4 — round-trip NAT/marks/ct fields when not the active editor. */}}
+  {{if ne $kind "nat"}}
+  <input type="hidden" name="port_forwards_raw" value="{{$f.PortForwardsRaw}}" />
+  <input type="hidden" name="masquerade_raw" value="{{$f.MasqueradeRaw}}" />
+  {{end}}
+  {{if ne $kind "marks"}}
+  <input type="hidden" name="marks_raw" value="{{$f.MarksRaw}}" />
+  {{end}}
+  {{if ne $kind "ct"}}
+  <input type="hidden" name="ct_helper_ftp"  value="{{if $f.CTHelperFTP}}on{{end}}" />
+  <input type="hidden" name="ct_helper_sip"  value="{{if $f.CTHelperSIP}}on{{end}}" />
+  <input type="hidden" name="ct_helper_tftp" value="{{if $f.CTHelperTFTP}}on{{end}}" />
+  <input type="hidden" name="ct_helper_pptp" value="{{if $f.CTHelperPPTP}}on{{end}}" />
+  <input type="hidden" name="ct_helper_irc"  value="{{if $f.CTHelperIRC}}on{{end}}" />
+  <input type="hidden" name="ct_helper_h323" value="{{if $f.CTHelperH323}}on{{end}}" />
+  {{end}}
+  {{if eq $kind "ssh"}}
   <div class="es-flow" data-flow-for="ssh_audience">
     <span class="flow-pill" data-flow-source>anyone</span>
     <span class="flow-track">
@@ -758,13 +775,109 @@
       />
     </label>
   </details>
+
+  {{else if eq $kind "nat"}}
+  <fieldset class="es-section">
+    <legend>Port forwards (DNAT)</legend>
+    <p class="muted">
+      One rule per line:
+      <code>[proto] &lt;ext_port&gt; &lt;to_addr&gt;[:&lt;to_port&gt;] [iif=&lt;iface&gt;] [from=&lt;cidr&gt;]</code>.
+      Default proto is <code>tcp</code>; <code>to_port</code> defaults to
+      <code>ext_port</code>. IPv4 destinations only.
+    </p>
+    <textarea
+      class="input mono"
+      name="port_forwards_raw"
+      rows="6"
+      placeholder="tcp 8080 10.0.0.5:80 iif=eth0&#10;tcp 2222 10.0.0.5:22 iif=eth0&#10;udp 53 10.0.0.10"
+    >{{$f.PortForwardsRaw}}</textarea>
+  </fieldset>
+  <fieldset class="es-section">
+    <legend>Masquerade (SNAT)</legend>
+    <p class="muted">
+      One rule per line: <code>&lt;oif&gt; [&lt;source-cidr&gt;]</code>. Masquerades
+      every packet leaving <code>oif</code>; add a CIDR to scope it (e.g. only the
+      LAN).
+    </p>
+    <textarea
+      class="input mono"
+      name="masquerade_raw"
+      rows="3"
+      placeholder="eth0 10.0.0.0/24 # LAN to internet"
+    >{{$f.MasqueradeRaw}}</textarea>
+  </fieldset>
+  <p class="muted small">
+    Compiles into <code>ip zeerak-nat</code> with <code>prerouting</code>
+    (priority -100) + <code>postrouting</code> (priority 100).
+  </p>
+
+  {{else if eq $kind "marks"}}
+  <fieldset class="es-section">
+    <legend>Policy-routing marks</legend>
+    <p class="muted">
+      One rule per line: <code>&lt;name&gt; set=&lt;value&gt; [proto=tcp|udp]
+      [dport=&lt;n&gt;] [oif=&lt;iface&gt;] [daddr=&lt;cidr&gt;]</code>.
+      <code>set</code> accepts decimal or <code>0x</code>-hex.
+    </p>
+    <textarea
+      class="input mono"
+      name="marks_raw"
+      rows="6"
+      placeholder="vpn-split set=0x100 daddr=10.50.0.0/16 # send to wg0&#10;voip set=0x200 proto=udp dport=5060"
+    >{{$f.MarksRaw}}</textarea>
+  </fieldset>
+  <p class="muted small">
+    Compiles into <code>inet zeerak-marks</code>, output chain
+    (<code>type route</code>, priority -150). Use <code>ip rule fwmark
+    &lt;value&gt; lookup &lt;table&gt;</code> in your routing layer to act on
+    these marks.
+  </p>
+
+  {{else if eq $kind "ct"}}
+  <fieldset class="es-section">
+    <legend>Conntrack helpers</legend>
+    <p class="muted">
+      Attach kernel conntrack helpers at their canonical ports. Only enable the
+      ones you actually use — helpers parse application traffic and have
+      historically been a source of CVEs.
+    </p>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_ftp" {{if $f.CTHelperFTP}}checked{{end}} />
+      <span><strong>FTP</strong> &mdash; <code>tcp/21</code>, opens data channel ports.</span>
+    </label>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_sip" {{if $f.CTHelperSIP}}checked{{end}} />
+      <span><strong>SIP</strong> &mdash; <code>udp/5060</code>, opens RTP/RTCP media ports.</span>
+    </label>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_tftp" {{if $f.CTHelperTFTP}}checked{{end}} />
+      <span><strong>TFTP</strong> &mdash; <code>udp/69</code>.</span>
+    </label>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_pptp" {{if $f.CTHelperPPTP}}checked{{end}} />
+      <span><strong>PPTP</strong> &mdash; <code>tcp/1723</code> (legacy VPN).</span>
+    </label>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_irc" {{if $f.CTHelperIRC}}checked{{end}} />
+      <span><strong>IRC</strong> &mdash; <code>tcp/6667</code>, opens DCC channels.</span>
+    </label>
+    <label class="es-row">
+      <input type="checkbox" name="ct_helper_h323" {{if $f.CTHelperH323}}checked{{end}} />
+      <span><strong>H.323</strong> &mdash; <code>tcp/1720</code> (RAS).</span>
+    </label>
+  </fieldset>
+  <p class="muted small">
+    Compiles into <code>inet zeerak-ct</code>, prerouting priority -200, so
+    helpers attach before any filter decisions in <code>zeerak-presets</code>.
+  </p>
+
   {{end}}
 
   <div class="es-actions">
     <button class="btn btn-primary" type="submit">Review changes</button>
     <a class="btn btn-ghost" href="/">Cancel</a>
   </div>
-  {{if and (ne $kind "protection") (ne $kind "outbound")}}
+  {{if and (ne $kind "protection") (ne $kind "outbound") (ne $kind "nat") (ne $kind "marks") (ne $kind "ct")}}
   <p class="es-direction-note muted">
     <strong>Inbound only.</strong> This page configures who can reach
     <em>into</em> this machine. To control what this machine can

@@ -97,7 +97,6 @@
 </section>
 
 {{with $page.Routing}}
-{{if .Active}}
 <section class="services-section integrations-section">
   <header class="services-header">
     <div>
@@ -107,21 +106,26 @@
   </header>
   <div class="integrations-row">
     {{if .PortForwards}}
-      <span class="chip chip-info" title="Port forwards (DNAT) configured under presets.port_forwards">{{.PortForwards}} port forward{{if ne .PortForwards 1}}s{{end}}</span>
+      <a class="chip chip-info" href="/edit/nat" title="Port forwards (DNAT) configured under presets.port_forwards">{{.PortForwards}} port forward{{if ne .PortForwards 1}}s{{end}}</a>
+    {{else}}
+      <a class="chip chip-ghost" href="/edit/nat" title="Add NAT / port-forward rules">+ NAT &amp; port forwards</a>
     {{end}}
     {{if .Masquerades}}
-      <span class="chip chip-info" title="Masquerade rules under presets.masquerade">{{.Masquerades}} masquerade{{if ne .Masquerades 1}}s{{end}}</span>
+      <a class="chip chip-info" href="/edit/nat" title="Masquerade rules under presets.masquerade">{{.Masquerades}} masquerade{{if ne .Masquerades 1}}s{{end}}</a>
     {{end}}
     {{if .Marks}}
-      <span class="chip chip-info" title="Policy-routing mark rules (presets.marks)">{{.Marks}} mark rule{{if ne .Marks 1}}s{{end}}</span>
+      <a class="chip chip-info" href="/edit/marks" title="Policy-routing mark rules (presets.marks)">{{.Marks}} mark rule{{if ne .Marks 1}}s{{end}}</a>
+    {{else}}
+      <a class="chip chip-ghost" href="/edit/marks" title="Add policy-routing fwmarks">+ Marks</a>
     {{end}}
     {{if .CTHelpers}}
-      <span class="chip chip-info" title="Conntrack helpers attached at canonical ports">ct helpers: {{range $i,$h := .CTHelpers}}{{if $i}}, {{end}}{{$h}}{{end}}</span>
+      <a class="chip chip-info" href="/edit/ct" title="Conntrack helpers attached at canonical ports">ct helpers: {{range $i,$h := .CTHelpers}}{{if $i}}, {{end}}{{$h}}{{end}}</a>
+    {{else}}
+      <a class="chip chip-ghost" href="/edit/ct" title="Attach conntrack helpers (ftp, sip, …)">+ Conntrack helpers</a>
     {{end}}
   </div>
-  <p class="muted small">These compile into separate tables: <code>ip zeerak-nat</code>, <code>inet zeerak-marks</code>, <code>inet zeerak-ct</code>. Edit forms land in v0.5; for now configure under <code>presets:</code> in <code>zeerak.yaml</code>.</p>
+  <p class="muted small">These compile into separate tables: <code>ip zeerak-nat</code>, <code>inet zeerak-marks</code>, <code>inet zeerak-ct</code>. Click any chip to edit, or configure under <code>presets:</code> in <code>zeerak.yaml</code>.</p>
 </section>
-{{end}}
 {{end}}
 
 {{with $page.Integrations}}

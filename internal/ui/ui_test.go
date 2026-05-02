@@ -292,3 +292,69 @@ func TestParseBlockSets(t *testing.T) {
 		t.Errorf("spam6 set wrong: %+v", got[1])
 	}
 }
+
+func TestParsePortForwards(t *testing.T) {
+	got, err := parsePortForwards("# header\ntcp 8080 10.0.0.5:80 iif=eth0 # web\nudp 53 10.0.0.10\n2222 10.0.0.5:22 from=192.168.0.0/16\n")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d, want 3: %+v", len(got), got)
+	}
+	if got[0].Proto != "tcp" || got[0].ExtPort != 8080 || got[0].To != "10.0.0.5" || got[0].ToPort != 80 || got[0].IIF != "eth0" || got[0].Comment != "web" {
+		t.Errorf("rule 0 wrong: %+v", got[0])
+	}
+	if got[1].Proto != "udp" || got[1].ExtPort != 53 || got[1].To != "10.0.0.10" || got[1].ToPort != 0 {
+		t.Errorf("rule 1 wrong: %+v", got[1])
+	}
+	if got[2].Proto != "" || got[2].ExtPort != 2222 || got[2].From != "192.168.0.0/16" {
+		t.Errorf("rule 2 wrong: %+v", got[2])
+	}
+	if _, err := parsePortForwards("tcp 80\n"); err == nil {
+		t.Errorf("expected error for missing destination")
+	}
+	if _, err := parsePortForwards("tcp abc 10.0.0.5\n"); err == nil {
+		t.Errorf("expected error for non-numeric ext_port")
+	}
+}
+
+func TestParseMasquerade(t *testing.T) {
+	got, err := parseMasquerade("eth0 10.0.0.0/24 # lan\noif=wg0\n")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d, want 2: %+v", len(got), got)
+	}
+	if got[0].OIF != "eth0" || got[0].Source != "10.0.0.0/24" || got[0].Comment != "lan" {
+		t.Errorf("rule 0 wrong: %+v", got[0])
+	}
+	if got[1].OIF != "wg0" || got[1].Source != "" {
+		t.Errorf("rule 1 wrong: %+v", got[1])
+	}
+	if _, err := parseMasquerade("# only comment\nsource=1.2.3.0/24\n"); err == nil {
+		t.Errorf("expected error for missing oif")
+	}
+}
+
+func TestParseMarks(t *testing.T) {
+	got, err := parseMarks("vpn-split set=0x100 daddr=10.50.0.0/16 # split\nvoip set=512 proto=udp dport=5060\n")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d, want 2: %+v", len(got), got)
+	}
+	if got[0].Name != "vpn-split" || got[0].Set != 0x100 || got[0].Daddr != "10.50.0.0/16" || got[0].Comment != "split" {
+		t.Errorf("rule 0 wrong: %+v", got[0])
+	}
+	if got[1].Name != "voip" || got[1].Set != 512 || got[1].Proto != "udp" || got[1].DPort != 5060 {
+		t.Errorf("rule 1 wrong: %+v", got[1])
+	}
+	if _, err := parseMarks("noset\n"); err == nil {
+		t.Errorf("expected error for missing set=")
+	}
+	if _, err := parseMarks("bad set=notanint\n"); err == nil {
+		t.Errorf("expected error for bad set value")
+	}
+}

@@ -337,6 +337,19 @@ type presetForm struct {
 	OutBlock      string // newline/comma-separated CIDRs
 	OutBlockRefs  string // newline/comma-separated NamedBlockSet names (v0.3 §10 #7)
 	BlockSetsRaw  string // each line "setname cidr"; repeated names accumulate (v0.3 §10 #7)
+
+	// v0.4 nftables-native scope (NAT, policy-routing marks, conntrack helpers).
+	// Each *Raw is a textarea — one rule per line. See parsePortForwards /
+	// parseMasquerade / parseMarks for the per-line grammar.
+	PortForwardsRaw string
+	MasqueradeRaw   string
+	MarksRaw        string
+	CTHelperFTP     bool
+	CTHelperSIP     bool
+	CTHelperTFTP    bool
+	CTHelperPPTP    bool
+	CTHelperIRC     bool
+	CTHelperH323    bool
 }
 
 func splitCIDRs(s string) []string {
@@ -414,6 +427,230 @@ func parseBlockSets(s string) []policy.NamedBlockSet {
 	return out
 }
 
+// stripComment splits a line at the first '#' returning (body, comment).
+// Both halves are trimmed; comment never includes the '#'.
+func stripComment(line string) (body, comment string) {
+	if i := strings.IndexByte(line, '#'); i >= 0 {
+		return strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+	}
+	return strings.TrimSpace(line), ""
+}
+
+// parseKVTokens splits a line into positional tokens and key=value tokens.
+// Tokens are separated by whitespace. Used by the v0.4 routing parsers.
+func parseKVTokens(s string) (positional []string, kv map[string]string) {
+	kv = map[string]string{}
+	for _, tok := range strings.Fields(s) {
+		if i := strings.IndexByte(tok, '='); i > 0 {
+			kv[strings.ToLower(tok[:i])] = tok[i+1:]
+		} else {
+			positional = append(positional, tok)
+		}
+	}
+	return positional, kv
+}
+
+// parsePortForwards parses the "port forwards" textarea. Each non-empty,
+// non-comment line is one rule:
+//
+//	[proto] <ext_port> <to>[:<to_port>] [iif=<iface>] [from=<cidr>]
+//
+// Defaults: proto=tcp, to_port=ext_port. Trailing "# comment" preserved.
+func parsePortForwards(s string) ([]policy.PortForward, error) {
+	var out []policy.PortForward
+	for ln, raw := range strings.Split(s, "\n") {
+		body, comment := stripComment(raw)
+		if body == "" {
+			continue
+		}
+		pos, kv := parseKVTokens(body)
+		if len(pos) < 2 {
+			return nil, fmt.Errorf("port_forwards line %d: need at least \"<ext_port> <to>\"", ln+1)
+		}
+		pf := policy.PortForward{Comment: comment, IIF: kv["iif"], From: kv["from"]}
+		idx := 0
+		// Optional leading proto.
+		switch strings.ToLower(pos[0]) {
+		case "tcp", "udp":
+			pf.Proto = strings.ToLower(pos[0])
+			idx = 1
+		}
+		if len(pos)-idx < 2 {
+			return nil, fmt.Errorf("port_forwards line %d: missing ext_port or to", ln+1)
+		}
+		n, err := strconv.Atoi(pos[idx])
+		if err != nil {
+			return nil, fmt.Errorf("port_forwards line %d: ext_port: %w", ln+1, err)
+		}
+		pf.ExtPort = n
+		dest := pos[idx+1]
+		if i := strings.LastIndexByte(dest, ':'); i >= 0 && !strings.Contains(dest[:i], ":") {
+			// "addr:port" (avoids matching v6 colons; we mandate plain IPv4 anyway)
+			pf.To = dest[:i]
+			tp, err := strconv.Atoi(dest[i+1:])
+			if err != nil {
+				return nil, fmt.Errorf("port_forwards line %d: to_port: %w", ln+1, err)
+			}
+			pf.ToPort = tp
+		} else {
+			pf.To = dest
+		}
+		out = append(out, pf)
+	}
+	return out, nil
+}
+
+// parseMasquerade parses the masquerade textarea. Each line is:
+//
+//	<oif> [<source-cidr>] [# comment]
+//
+// or with kv form: "oif=<iface> source=<cidr>".
+func parseMasquerade(s string) ([]policy.Masquerade, error) {
+	var out []policy.Masquerade
+	for ln, raw := range strings.Split(s, "\n") {
+		body, comment := stripComment(raw)
+		if body == "" {
+			continue
+		}
+		pos, kv := parseKVTokens(body)
+		m := policy.Masquerade{Comment: comment, OIF: kv["oif"], Source: kv["source"]}
+		if m.OIF == "" && len(pos) > 0 {
+			m.OIF = pos[0]
+			pos = pos[1:]
+		}
+		if m.Source == "" && len(pos) > 0 {
+			m.Source = pos[0]
+		}
+		if m.OIF == "" {
+			return nil, fmt.Errorf("masquerade line %d: missing oif", ln+1)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// parseMarks parses the marks textarea. Each line:
+//
+//	<name> set=<value> [proto=tcp|udp] [dport=<n>] [oif=<iface>] [daddr=<cidr>] [# comment]
+//
+// `set` accepts decimal or 0x-hex.
+func parseMarks(s string) ([]policy.Mark, error) {
+	var out []policy.Mark
+	for ln, raw := range strings.Split(s, "\n") {
+		body, comment := stripComment(raw)
+		if body == "" {
+			continue
+		}
+		pos, kv := parseKVTokens(body)
+		if len(pos) == 0 {
+			return nil, fmt.Errorf("marks line %d: missing name", ln+1)
+		}
+		m := policy.Mark{
+			Name:    pos[0],
+			Proto:   kv["proto"],
+			OIF:     kv["oif"],
+			Daddr:   kv["daddr"],
+			Comment: comment,
+		}
+		setRaw, ok := kv["set"]
+		if !ok {
+			return nil, fmt.Errorf("marks line %d: set=<value> required", ln+1)
+		}
+		v, err := strconv.ParseUint(setRaw, 0, 32)
+		if err != nil {
+			return nil, fmt.Errorf("marks line %d: set: %w", ln+1, err)
+		}
+		m.Set = uint32(v)
+		if dp, ok := kv["dport"]; ok {
+			n, err := strconv.Atoi(dp)
+			if err != nil {
+				return nil, fmt.Errorf("marks line %d: dport: %w", ln+1, err)
+			}
+			m.DPort = n
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// formatPortForwards renders a slice back to the textarea form used by parsePortForwards.
+func formatPortForwards(in []policy.PortForward) string {
+	if len(in) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, pf := range in {
+		var b strings.Builder
+		if pf.Proto != "" {
+			b.WriteString(pf.Proto)
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, "%d %s", pf.ExtPort, pf.To)
+		if pf.ToPort != 0 && pf.ToPort != pf.ExtPort {
+			fmt.Fprintf(&b, ":%d", pf.ToPort)
+		}
+		if pf.IIF != "" {
+			fmt.Fprintf(&b, " iif=%s", pf.IIF)
+		}
+		if pf.From != "" {
+			fmt.Fprintf(&b, " from=%s", pf.From)
+		}
+		if pf.Comment != "" {
+			fmt.Fprintf(&b, " # %s", pf.Comment)
+		}
+		lines = append(lines, b.String())
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatMasquerade(in []policy.Masquerade) string {
+	if len(in) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, m := range in {
+		var b strings.Builder
+		b.WriteString(m.OIF)
+		if m.Source != "" {
+			b.WriteByte(' ')
+			b.WriteString(m.Source)
+		}
+		if m.Comment != "" {
+			fmt.Fprintf(&b, " # %s", m.Comment)
+		}
+		lines = append(lines, b.String())
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatMarks(in []policy.Mark) string {
+	if len(in) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, m := range in {
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s set=0x%x", m.Name, m.Set)
+		if m.Proto != "" {
+			fmt.Fprintf(&b, " proto=%s", m.Proto)
+		}
+		if m.DPort != 0 {
+			fmt.Fprintf(&b, " dport=%d", m.DPort)
+		}
+		if m.OIF != "" {
+			fmt.Fprintf(&b, " oif=%s", m.OIF)
+		}
+		if m.Daddr != "" {
+			fmt.Fprintf(&b, " daddr=%s", m.Daddr)
+		}
+		if m.Comment != "" {
+			fmt.Fprintf(&b, " # %s", m.Comment)
+		}
+		lines = append(lines, b.String())
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (f presetForm) toPresets() (policy.Presets, error) {
 	p := policy.Presets{
 		DefaultDenyInbound: f.DefaultDenyInbound,
@@ -453,6 +690,32 @@ func (f presetForm) toPresets() (policy.Presets, error) {
 	}
 	if out, ok := f.toOutbound(); ok {
 		p.Outbound = out
+	}
+	// v0.4 routing/NAT/ct: parse the textareas + boolean helpers.
+	pfs, err := parsePortForwards(f.PortForwardsRaw)
+	if err != nil {
+		return policy.Presets{}, err
+	}
+	p.PortForwards = pfs
+	masq, err := parseMasquerade(f.MasqueradeRaw)
+	if err != nil {
+		return policy.Presets{}, err
+	}
+	p.Masquerade = masq
+	marks, err := parseMarks(f.MarksRaw)
+	if err != nil {
+		return policy.Presets{}, err
+	}
+	p.Marks = marks
+	if f.CTHelperFTP || f.CTHelperSIP || f.CTHelperTFTP || f.CTHelperPPTP || f.CTHelperIRC || f.CTHelperH323 {
+		p.CTHelpers = &policy.CTHelpers{
+			FTP:  f.CTHelperFTP,
+			SIP:  f.CTHelperSIP,
+			TFTP: f.CTHelperTFTP,
+			PPTP: f.CTHelperPPTP,
+			IRC:  f.CTHelperIRC,
+			H323: f.CTHelperH323,
+		}
 	}
 	if err := p.Validate(); err != nil {
 		return policy.Presets{}, err
@@ -571,6 +834,16 @@ func parsePresetForm(r *http.Request) (presetForm, error) {
 		OutBlock:           r.PostFormValue("out_block"),
 		OutBlockRefs:       r.PostFormValue("out_block_refs"),
 		BlockSetsRaw:       r.PostFormValue("block_sets_raw"),
+
+		PortForwardsRaw: r.PostFormValue("port_forwards_raw"),
+		MasqueradeRaw:   r.PostFormValue("masquerade_raw"),
+		MarksRaw:        r.PostFormValue("marks_raw"),
+		CTHelperFTP:     r.PostFormValue("ct_helper_ftp") == "on",
+		CTHelperSIP:     r.PostFormValue("ct_helper_sip") == "on",
+		CTHelperTFTP:    r.PostFormValue("ct_helper_tftp") == "on",
+		CTHelperPPTP:    r.PostFormValue("ct_helper_pptp") == "on",
+		CTHelperIRC:     r.PostFormValue("ct_helper_irc") == "on",
+		CTHelperH323:    r.PostFormValue("ct_helper_h323") == "on",
 	}, nil
 }
 
@@ -594,6 +867,9 @@ var editServiceMeta = map[string]struct {
 	"mail":       {"mail", "Mail", "Which mail ports are open."},
 	"protection": {"shield", "Default protection", "Block everything that isn't explicitly allowed."},
 	"outbound":   {"upload", "Outbound traffic", "What this machine is allowed to send to the internet."},
+	"nat":        {"upload", "NAT & port forwards", "DNAT inbound ports to internal hosts; SNAT outbound traffic via masquerade."},
+	"marks":      {"upload", "Policy-routing marks", "Tag traffic with fwmarks for split-tunnel VPN, QoS, or custom routing."},
+	"ct":         {"shield", "Conntrack helpers", "Attach kernel helpers (ftp, sip, …) at canonical ports for protocols with secondary connections."},
 }
 
 // presetFormFromPresets seeds a presetForm from the currently applied presets.
@@ -664,6 +940,17 @@ func presetFormFromPresets(p policy.Presets) presetForm {
 			}
 		}
 		f.BlockSetsRaw = strings.Join(lines, "\n")
+	}
+	f.PortForwardsRaw = formatPortForwards(p.PortForwards)
+	f.MasqueradeRaw = formatMasquerade(p.Masquerade)
+	f.MarksRaw = formatMarks(p.Marks)
+	if p.CTHelpers != nil {
+		f.CTHelperFTP = p.CTHelpers.FTP
+		f.CTHelperSIP = p.CTHelpers.SIP
+		f.CTHelperTFTP = p.CTHelpers.TFTP
+		f.CTHelperPPTP = p.CTHelpers.PPTP
+		f.CTHelperIRC = p.CTHelpers.IRC
+		f.CTHelperH323 = p.CTHelpers.H323
 	}
 	return f
 }
