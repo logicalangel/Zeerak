@@ -65,37 +65,6 @@
   </div>
 </section>
 
-<section class="services">
-  <header class="services-header">
-    <div>
-      <h2>Incoming traffic</h2>
-      <p class="muted">Who can reach this machine.</p>
-    </div>
-    <a class="btn btn-primary" href="/presets">+ Add or change</a>
-  </header>
-
-  <div class="service-grid">
-    {{range $page.Cards}}
-      {{if ne .Key "outbound"}}{{template "service-card" .}}{{end}}
-    {{end}}
-  </div>
-</section>
-
-<section class="services">
-  <header class="services-header">
-    <div>
-      <h2>Outgoing traffic</h2>
-      <p class="muted">What this machine can talk to.</p>
-    </div>
-  </header>
-
-  <div class="service-grid service-grid-out">
-    {{range $page.Cards}}
-      {{if eq .Key "outbound"}}{{template "service-card" .}}{{end}}
-    {{end}}
-  </div>
-</section>
-
 {{with $page.Routing}}
 <section class="services-section integrations-section">
   <header class="services-header">
@@ -127,6 +96,37 @@
   <p class="muted small">These compile into separate tables: <code>ip zeerak-nat</code>, <code>inet zeerak-marks</code>, <code>inet zeerak-ct</code>. Click any chip to edit, or configure under <code>presets:</code> in <code>zeerak.yaml</code>.</p>
 </section>
 {{end}}
+
+<section class="services">
+  <header class="services-header">
+    <div>
+      <h2>Incoming traffic</h2>
+      <p class="muted">Who can reach this machine.</p>
+    </div>
+    <a class="btn btn-primary" href="/presets">+ Add or change</a>
+  </header>
+
+  <div class="service-grid">
+    {{range $page.Cards}}
+      {{if ne .Key "outbound"}}{{template "service-card" .}}{{end}}
+    {{end}}
+  </div>
+</section>
+
+<section class="services">
+  <header class="services-header">
+    <div>
+      <h2>Outgoing traffic</h2>
+      <p class="muted">What this machine can talk to.</p>
+    </div>
+  </header>
+
+  <div class="service-grid service-grid-out">
+    {{range $page.Cards}}
+      {{if eq .Key "outbound"}}{{template "service-card" .}}{{end}}
+    {{end}}
+  </div>
+</section>
 
 {{with $page.Integrations}}
 {{if or .Tailscale.Detected .WireGuard.Detected .Docker.Detected .Caddy.Detected}}

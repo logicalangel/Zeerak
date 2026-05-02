@@ -86,13 +86,36 @@
   <input type="hidden" name="out_block_refs" value="{{$f.OutBlockRefs}}" />
   <input type="hidden" name="block_sets_raw" value="{{$f.BlockSetsRaw}}" />
   {{end}}
-  {{/* v0.4 — round-trip NAT/marks/ct fields when not the active editor. */}}
+  {{/* v0.4 — round-trip NAT/marks/ct fields when not the active editor.
+       Each row is rendered as a parallel set of indexed inputs so the panel
+       can rebuild []policy.PortForward / []policy.Masquerade / []policy.Mark
+       without touching a textarea grammar. */}}
   {{if ne $kind "nat"}}
-  <input type="hidden" name="port_forwards_raw" value="{{$f.PortForwardsRaw}}" />
-  <input type="hidden" name="masquerade_raw" value="{{$f.MasqueradeRaw}}" />
+    {{range $f.PortForwards}}
+      <input type="hidden" name="pf_proto"    value="{{.Proto}}" />
+      <input type="hidden" name="pf_ext_port" value="{{.ExtPort}}" />
+      <input type="hidden" name="pf_to"       value="{{.To}}" />
+      <input type="hidden" name="pf_to_port"  value="{{if .ToPort}}{{.ToPort}}{{end}}" />
+      <input type="hidden" name="pf_iif"      value="{{.IIF}}" />
+      <input type="hidden" name="pf_from"     value="{{.From}}" />
+      <input type="hidden" name="pf_comment"  value="{{.Comment}}" />
+    {{end}}
+    {{range $f.Masquerades}}
+      <input type="hidden" name="mq_oif"     value="{{.OIF}}" />
+      <input type="hidden" name="mq_source"  value="{{.Source}}" />
+      <input type="hidden" name="mq_comment" value="{{.Comment}}" />
+    {{end}}
   {{end}}
   {{if ne $kind "marks"}}
-  <input type="hidden" name="marks_raw" value="{{$f.MarksRaw}}" />
+    {{range $f.Marks}}
+      <input type="hidden" name="mk_name"    value="{{.Name}}" />
+      <input type="hidden" name="mk_set"     value="0x{{printf "%x" .Set}}" />
+      <input type="hidden" name="mk_proto"   value="{{.Proto}}" />
+      <input type="hidden" name="mk_dport"   value="{{if .DPort}}{{.DPort}}{{end}}" />
+      <input type="hidden" name="mk_oif"     value="{{.OIF}}" />
+      <input type="hidden" name="mk_daddr"   value="{{.Daddr}}" />
+      <input type="hidden" name="mk_comment" value="{{.Comment}}" />
+    {{end}}
   {{end}}
   {{if ne $kind "ct"}}
   <input type="hidden" name="ct_helper_ftp"  value="{{if $f.CTHelperFTP}}on{{end}}" />
@@ -780,91 +803,188 @@
   <fieldset class="es-section">
     <legend>Port forwards (DNAT)</legend>
     <p class="muted">
-      One rule per line:
-      <code>[proto] &lt;ext_port&gt; &lt;to_addr&gt;[:&lt;to_port&gt;] [iif=&lt;iface&gt;] [from=&lt;cidr&gt;]</code>.
-      Default proto is <code>tcp</code>; <code>to_port</code> defaults to
-      <code>ext_port</code>. IPv4 destinations only.
+      Translate an inbound port on this machine to an internal host. IPv4
+      destinations only. Each row becomes one rule in
+      <code>ip zeerak-nat / prerouting</code>.
     </p>
-    <textarea
-      class="input mono"
-      name="port_forwards_raw"
-      rows="6"
-      placeholder="tcp 8080 10.0.0.5:80 iif=eth0&#10;tcp 2222 10.0.0.5:22 iif=eth0&#10;udp 53 10.0.0.10"
-    >{{$f.PortForwardsRaw}}</textarea>
+    <div class="row-table" data-rows="pf">
+      <div class="row-table-head" aria-hidden="true">
+        <span>Proto</span>
+        <span>Ext port</span>
+        <span>To address</span>
+        <span>To port</span>
+        <span>Inbound iface</span>
+        <span>From CIDR</span>
+        <span>Comment</span>
+        <span class="row-actions" aria-label="Remove"></span>
+      </div>
+      <div class="row-table-body" data-rows-body>
+        {{range $i, $pf := $f.PortForwards}}
+        <div class="row-table-row">
+          <select class="input small" name="pf_proto" aria-label="Protocol">
+            <option value="tcp" {{if eq $pf.Proto "tcp"}}selected{{end}}>tcp</option>
+            <option value="udp" {{if eq $pf.Proto "udp"}}selected{{end}}>udp</option>
+            <option value=""    {{if eq $pf.Proto ""}}selected{{end}}>any</option>
+          </select>
+          <input class="input small" type="number" min="1" max="65535" name="pf_ext_port" value="{{$pf.ExtPort}}" placeholder="8080" aria-label="External port" />
+          <input class="input mono"  type="text"   name="pf_to"        value="{{$pf.To}}"      placeholder="10.0.0.5" aria-label="Internal address" />
+          <input class="input small" type="number" min="1" max="65535" name="pf_to_port" value="{{if $pf.ToPort}}{{$pf.ToPort}}{{end}}" placeholder="80" aria-label="Internal port" />
+          <input class="input small" type="text"   name="pf_iif"       value="{{$pf.IIF}}"     placeholder="eth0" aria-label="Inbound interface" />
+          <input class="input mono"  type="text"   name="pf_from"      value="{{$pf.From}}"    placeholder="0.0.0.0/0" aria-label="Source CIDR" />
+          <input class="input"       type="text"   name="pf_comment"   value="{{$pf.Comment}}" placeholder="why?" aria-label="Comment" />
+          <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+        </div>
+        {{end}}
+      </div>
+      <button type="button" class="btn btn-ghost row-add" data-row-add="pf-row-template" data-row-target="pf">
+        + Add port forward
+      </button>
+    </div>
   </fieldset>
+
   <fieldset class="es-section">
     <legend>Masquerade (SNAT)</legend>
     <p class="muted">
-      One rule per line: <code>&lt;oif&gt; [&lt;source-cidr&gt;]</code>. Masquerades
-      every packet leaving <code>oif</code>; add a CIDR to scope it (e.g. only the
-      LAN).
+      Hide internal source addresses behind the egress interface. Add a
+      source CIDR to scope it (e.g. only the LAN gets NAT'd). Becomes one rule
+      in <code>ip zeerak-nat / postrouting</code>.
     </p>
-    <textarea
-      class="input mono"
-      name="masquerade_raw"
-      rows="3"
-      placeholder="eth0 10.0.0.0/24 # LAN to internet"
-    >{{$f.MasqueradeRaw}}</textarea>
+    <div class="row-table" data-rows="mq">
+      <div class="row-table-head row-table-head-mq" aria-hidden="true">
+        <span>Egress iface</span>
+        <span>Source CIDR</span>
+        <span>Comment</span>
+        <span class="row-actions"></span>
+      </div>
+      <div class="row-table-body" data-rows-body>
+        {{range $i, $mq := $f.Masquerades}}
+        <div class="row-table-row row-table-row-mq">
+          <input class="input small" type="text" name="mq_oif"     value="{{$mq.OIF}}"     placeholder="eth0" aria-label="Egress interface" />
+          <input class="input mono"  type="text" name="mq_source"  value="{{$mq.Source}}"  placeholder="10.0.0.0/24" aria-label="Source CIDR" />
+          <input class="input"       type="text" name="mq_comment" value="{{$mq.Comment}}" placeholder="why?" aria-label="Comment" />
+          <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+        </div>
+        {{end}}
+      </div>
+      <button type="button" class="btn btn-ghost row-add" data-row-add="mq-row-template" data-row-target="mq">
+        + Add masquerade rule
+      </button>
+    </div>
   </fieldset>
+
   <p class="muted small">
-    Compiles into <code>ip zeerak-nat</code> with <code>prerouting</code>
-    (priority -100) + <code>postrouting</code> (priority 100).
+    Compiles into <code>ip zeerak-nat</code>:
+    <code>prerouting</code> chain (priority -100) for DNAT,
+    <code>postrouting</code> chain (priority 100) for SNAT.
   </p>
 
   {{else if eq $kind "marks"}}
   <fieldset class="es-section">
     <legend>Policy-routing marks</legend>
     <p class="muted">
-      One rule per line: <code>&lt;name&gt; set=&lt;value&gt; [proto=tcp|udp]
-      [dport=&lt;n&gt;] [oif=&lt;iface&gt;] [daddr=&lt;cidr&gt;]</code>.
-      <code>set</code> accepts decimal or <code>0x</code>-hex.
+      Tag traffic with an <code>fwmark</code> so a downstream
+      <code>ip rule fwmark &lt;value&gt; lookup &lt;table&gt;</code> can pick a
+      route — split-tunnel VPN, QoS, or steering through a specific egress.
+      Mark values accept decimal or <code>0x</code>-hex.
     </p>
-    <textarea
-      class="input mono"
-      name="marks_raw"
-      rows="6"
-      placeholder="vpn-split set=0x100 daddr=10.50.0.0/16 # send to wg0&#10;voip set=0x200 proto=udp dport=5060"
-    >{{$f.MarksRaw}}</textarea>
+    <div class="row-table row-table-marks" data-rows="mk">
+      <div class="row-table-head row-table-head-mk" aria-hidden="true">
+        <span>Name</span>
+        <span>Mark value</span>
+        <span>Proto</span>
+        <span>Dest port</span>
+        <span>Egress iface</span>
+        <span>Dest CIDR</span>
+        <span>Comment</span>
+        <span class="row-actions"></span>
+      </div>
+      <div class="row-table-body" data-rows-body>
+        {{range $i, $mk := $f.Marks}}
+        <div class="row-table-row row-table-row-mk">
+          <input class="input small" type="text"   name="mk_name"    value="{{$mk.Name}}" placeholder="vpn-split" aria-label="Name" required />
+          <input class="input small mono" type="text" name="mk_set"  value="0x{{printf "%x" $mk.Set}}" placeholder="0x100" aria-label="Mark value" required />
+          <select class="input small" name="mk_proto" aria-label="Protocol">
+            <option value=""    {{if eq $mk.Proto ""}}selected{{end}}>any</option>
+            <option value="tcp" {{if eq $mk.Proto "tcp"}}selected{{end}}>tcp</option>
+            <option value="udp" {{if eq $mk.Proto "udp"}}selected{{end}}>udp</option>
+          </select>
+          <input class="input small" type="number" min="1" max="65535" name="mk_dport" value="{{if $mk.DPort}}{{$mk.DPort}}{{end}}" placeholder="5060" aria-label="Destination port" />
+          <input class="input small" type="text"   name="mk_oif"     value="{{$mk.OIF}}"     placeholder="wg0" aria-label="Egress interface" />
+          <input class="input mono"  type="text"   name="mk_daddr"   value="{{$mk.Daddr}}"   placeholder="10.50.0.0/16" aria-label="Destination CIDR" />
+          <input class="input"       type="text"   name="mk_comment" value="{{$mk.Comment}}" placeholder="why?" aria-label="Comment" />
+          <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+        </div>
+        {{end}}
+      </div>
+      <button type="button" class="btn btn-ghost row-add" data-row-add="mk-row-template" data-row-target="mk">
+        + Add mark rule
+      </button>
+    </div>
   </fieldset>
   <p class="muted small">
     Compiles into <code>inet zeerak-marks</code>, output chain
-    (<code>type route</code>, priority -150). Use <code>ip rule fwmark
-    &lt;value&gt; lookup &lt;table&gt;</code> in your routing layer to act on
-    these marks.
+    (<code>type route</code>, priority -150). The mark only does something
+    when a matching <code>ip rule</code> exists in your routing layer.
   </p>
 
   {{else if eq $kind "ct"}}
   <fieldset class="es-section">
     <legend>Conntrack helpers</legend>
     <p class="muted">
-      Attach kernel conntrack helpers at their canonical ports. Only enable the
-      ones you actually use — helpers parse application traffic and have
-      historically been a source of CVEs.
+      Helpers parse application traffic to open the secondary flows old
+      protocols need (FTP data channel, RTP/RTCP for SIP, …). Only enable the
+      ones you actually use — historically a source of CVEs.
     </p>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_ftp" {{if $f.CTHelperFTP}}checked{{end}} />
-      <span><strong>FTP</strong> &mdash; <code>tcp/21</code>, opens data channel ports.</span>
-    </label>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_sip" {{if $f.CTHelperSIP}}checked{{end}} />
-      <span><strong>SIP</strong> &mdash; <code>udp/5060</code>, opens RTP/RTCP media ports.</span>
-    </label>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_tftp" {{if $f.CTHelperTFTP}}checked{{end}} />
-      <span><strong>TFTP</strong> &mdash; <code>udp/69</code>.</span>
-    </label>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_pptp" {{if $f.CTHelperPPTP}}checked{{end}} />
-      <span><strong>PPTP</strong> &mdash; <code>tcp/1723</code> (legacy VPN).</span>
-    </label>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_irc" {{if $f.CTHelperIRC}}checked{{end}} />
-      <span><strong>IRC</strong> &mdash; <code>tcp/6667</code>, opens DCC channels.</span>
-    </label>
-    <label class="es-row">
-      <input type="checkbox" name="ct_helper_h323" {{if $f.CTHelperH323}}checked{{end}} />
-      <span><strong>H.323</strong> &mdash; <code>tcp/1720</code> (RAS).</span>
-    </label>
+    <div class="ct-grid">
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_ftp" {{if $f.CTHelperFTP}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">FTP</span>
+          <span class="ct-card-port">tcp/21</span>
+          <span class="ct-card-help muted">Tracks PORT/PASV to allow the data channel.</span>
+        </span>
+      </label>
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_sip" {{if $f.CTHelperSIP}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">SIP</span>
+          <span class="ct-card-port">udp/5060</span>
+          <span class="ct-card-help muted">Opens RTP/RTCP media ports negotiated in SDP.</span>
+        </span>
+      </label>
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_tftp" {{if $f.CTHelperTFTP}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">TFTP</span>
+          <span class="ct-card-port">udp/69</span>
+          <span class="ct-card-help muted">Trivial FTP — boot images, network device config.</span>
+        </span>
+      </label>
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_pptp" {{if $f.CTHelperPPTP}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">PPTP</span>
+          <span class="ct-card-port">tcp/1723</span>
+          <span class="ct-card-help muted">Legacy VPN. Avoid unless you have a hard requirement.</span>
+        </span>
+      </label>
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_irc" {{if $f.CTHelperIRC}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">IRC</span>
+          <span class="ct-card-port">tcp/6667</span>
+          <span class="ct-card-help muted">Allows DCC file transfer / chat side-channels.</span>
+        </span>
+      </label>
+      <label class="ct-card">
+        <input type="checkbox" name="ct_helper_h323" {{if $f.CTHelperH323}}checked{{end}} />
+        <span class="ct-card-body">
+          <span class="ct-card-name">H.323</span>
+          <span class="ct-card-port">tcp/1720</span>
+          <span class="ct-card-help muted">Legacy video conferencing (RAS / Q.931).</span>
+        </span>
+      </label>
+    </div>
   </fieldset>
   <p class="muted small">
     Compiles into <code>inet zeerak-ct</code>, prerouting priority -200, so
@@ -872,6 +992,48 @@
   </p>
 
   {{end}}
+
+  {{/* Hidden row templates cloned by the "+ Add" buttons. */}}
+  <template id="pf-row-template">
+    <div class="row-table-row">
+      <select class="input small" name="pf_proto" aria-label="Protocol">
+        <option value="tcp" selected>tcp</option>
+        <option value="udp">udp</option>
+        <option value="">any</option>
+      </select>
+      <input class="input small" type="number" min="1" max="65535" name="pf_ext_port" placeholder="8080" aria-label="External port" />
+      <input class="input mono"  type="text"   name="pf_to"        placeholder="10.0.0.5" aria-label="Internal address" />
+      <input class="input small" type="number" min="1" max="65535" name="pf_to_port" placeholder="80" aria-label="Internal port" />
+      <input class="input small" type="text"   name="pf_iif"       placeholder="eth0" aria-label="Inbound interface" />
+      <input class="input mono"  type="text"   name="pf_from"      placeholder="0.0.0.0/0" aria-label="Source CIDR" />
+      <input class="input"       type="text"   name="pf_comment"   placeholder="why?" aria-label="Comment" />
+      <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+    </div>
+  </template>
+  <template id="mq-row-template">
+    <div class="row-table-row row-table-row-mq">
+      <input class="input small" type="text" name="mq_oif"     placeholder="eth0" aria-label="Egress interface" />
+      <input class="input mono"  type="text" name="mq_source"  placeholder="10.0.0.0/24" aria-label="Source CIDR" />
+      <input class="input"       type="text" name="mq_comment" placeholder="why?" aria-label="Comment" />
+      <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+    </div>
+  </template>
+  <template id="mk-row-template">
+    <div class="row-table-row row-table-row-mk">
+      <input class="input small" type="text"   name="mk_name"    placeholder="vpn-split" aria-label="Name" />
+      <input class="input small mono" type="text" name="mk_set"  placeholder="0x100" aria-label="Mark value" />
+      <select class="input small" name="mk_proto" aria-label="Protocol">
+        <option value="" selected>any</option>
+        <option value="tcp">tcp</option>
+        <option value="udp">udp</option>
+      </select>
+      <input class="input small" type="number" min="1" max="65535" name="mk_dport" placeholder="5060" aria-label="Destination port" />
+      <input class="input small" type="text"   name="mk_oif"     placeholder="wg0" aria-label="Egress interface" />
+      <input class="input mono"  type="text"   name="mk_daddr"   placeholder="10.50.0.0/16" aria-label="Destination CIDR" />
+      <input class="input"       type="text"   name="mk_comment" placeholder="why?" aria-label="Comment" />
+      <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
+    </div>
+  </template>
 
   <div class="es-actions">
     <button class="btn btn-primary" type="submit">Review changes</button>
@@ -1018,6 +1180,33 @@
         ta.value = cur ? cur + "\n" + val : val;
         ta.focus();
       });
+    });
+
+    // Structured row tables: "+ Add" buttons clone a hidden <template>;
+    // ✕ buttons remove the row. Submission relies on indexed inputs in
+    // parallel POST fields (pf_proto, pf_ext_port, …).
+    function focusFirstInput(node) {
+      var input = node.querySelector("input, select");
+      if (input) input.focus();
+    }
+    document.querySelectorAll(".row-add").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var tplId = btn.dataset.rowAdd;
+        var tpl = document.getElementById(tplId);
+        if (!tpl || !tpl.content) return;
+        var table = btn.closest(".row-table");
+        var body = table && table.querySelector("[data-rows-body]");
+        if (!body) return;
+        var clone = tpl.content.firstElementChild.cloneNode(true);
+        body.appendChild(clone);
+        focusFirstInput(clone);
+      });
+    });
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("[data-row-remove]");
+      if (!btn) return;
+      var row = btn.closest(".row-table-row");
+      if (row) row.remove();
     });
   })();
 </script>

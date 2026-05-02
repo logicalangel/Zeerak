@@ -1468,3 +1468,144 @@ input[type="number"].input {
 .service-grid-out {
   grid-template-columns: minmax(280px, 480px);
 }
+
+/* ─── v0.4 structured row tables (NAT, marks) ───────────────────────── */
+.row-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.row-table-head,
+.row-table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(80px, 0.7fr)   /* proto */
+    minmax(90px, 0.7fr)   /* ext port */
+    minmax(140px, 1.3fr)  /* to addr */
+    minmax(90px, 0.7fr)   /* to port */
+    minmax(100px, 0.9fr)  /* iif */
+    minmax(140px, 1.2fr)  /* from cidr */
+    minmax(120px, 1.4fr)  /* comment */
+    auto;                 /* remove */
+  gap: 0.5rem;
+  align-items: center;
+}
+.row-table-head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  padding: 0 0.4rem;
+}
+.row-table-head-mq,
+.row-table-row-mq {
+  grid-template-columns:
+    minmax(120px, 0.8fr)
+    minmax(160px, 1.4fr)
+    minmax(160px, 2fr)
+    auto;
+}
+.row-table-head-mk,
+.row-table-row-mk {
+  grid-template-columns:
+    minmax(120px, 1fr)    /* name */
+    minmax(110px, 0.9fr)  /* set */
+    minmax(80px, 0.6fr)   /* proto */
+    minmax(90px, 0.7fr)   /* dport */
+    minmax(100px, 0.8fr)  /* oif */
+    minmax(140px, 1.2fr)  /* daddr */
+    minmax(120px, 1.4fr)  /* comment */
+    auto;
+}
+.row-table-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+.row-table-row .input {
+  width: 100%;
+  min-width: 0;
+}
+.row-actions {
+  display: inline-block;
+  width: 2rem;
+}
+.row-remove {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 0.4rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.row-remove:hover {
+  border-color: var(--destructive, #c44);
+  color: var(--destructive, #c44);
+}
+.row-add {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+@media (max-width: 900px) {
+  .row-table-head { display: none; }
+  .row-table-row,
+  .row-table-row-mq,
+  .row-table-row-mk {
+    grid-template-columns: 1fr 1fr auto;
+  }
+  .row-table-row > .input { grid-column: span 2; }
+  .row-table-row > .row-remove { grid-column: 3; grid-row: 1; }
+}
+
+/* ─── v0.4 conntrack helper card grid ───────────────────────────────── */
+.ct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.ct-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.ct-card:hover {
+  border-color: var(--ring, var(--primary));
+}
+.ct-card input[type="checkbox"] {
+  margin-top: 0.2rem;
+  flex: 0 0 auto;
+}
+.ct-card:has(input:checked) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.ct-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.ct-card-name {
+  font-weight: 600;
+}
+.ct-card-port {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+.ct-card-help {
+  font-size: 0.85rem;
+  line-height: 1.35;
+}

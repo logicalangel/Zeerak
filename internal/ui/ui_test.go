@@ -293,33 +293,61 @@ func TestParseBlockSets(t *testing.T) {
 	}
 }
 
-func TestParsePortForwards(t *testing.T) {
-	got, err := parsePortForwards("# header\ntcp 8080 10.0.0.5:80 iif=eth0 # web\nudp 53 10.0.0.10\n2222 10.0.0.5:22 from=192.168.0.0/16\n")
+func TestParsePortForwardRows(t *testing.T) {
+	form := url.Values{
+		"pf_proto":    {"tcp", "udp", ""},
+		"pf_ext_port": {"8080", "53", "2222"},
+		"pf_to":       {"10.0.0.5", "10.0.0.10", "10.0.0.5"},
+		"pf_to_port":  {"80", "", "22"},
+		"pf_iif":      {"eth0", "", ""},
+		"pf_from":     {"", "", "192.168.0.0/16"},
+		"pf_comment":  {"web", "", ""},
+	}
+	got, err := parsePortForwardRows(form)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if len(got) != 3 {
-		t.Fatalf("got %d, want 3: %+v", len(got), got)
+		t.Fatalf("got %d rows, want 3: %+v", len(got), got)
 	}
 	if got[0].Proto != "tcp" || got[0].ExtPort != 8080 || got[0].To != "10.0.0.5" || got[0].ToPort != 80 || got[0].IIF != "eth0" || got[0].Comment != "web" {
-		t.Errorf("rule 0 wrong: %+v", got[0])
+		t.Errorf("row 0 wrong: %+v", got[0])
 	}
-	if got[1].Proto != "udp" || got[1].ExtPort != 53 || got[1].To != "10.0.0.10" || got[1].ToPort != 0 {
-		t.Errorf("rule 1 wrong: %+v", got[1])
+	if got[1].Proto != "udp" || got[1].ExtPort != 53 || got[1].ToPort != 0 {
+		t.Errorf("row 1 wrong: %+v", got[1])
 	}
-	if got[2].Proto != "" || got[2].ExtPort != 2222 || got[2].From != "192.168.0.0/16" {
-		t.Errorf("rule 2 wrong: %+v", got[2])
+	if got[2].Proto != "" || got[2].From != "192.168.0.0/16" {
+		t.Errorf("row 2 wrong: %+v", got[2])
 	}
-	if _, err := parsePortForwards("tcp 80\n"); err == nil {
-		t.Errorf("expected error for missing destination")
+
+	// Blank rows (left behind by "+ Add" with nothing typed) are skipped.
+	blank := url.Values{
+		"pf_proto":    {"tcp"},
+		"pf_ext_port": {""},
+		"pf_to":       {""},
 	}
-	if _, err := parsePortForwards("tcp abc 10.0.0.5\n"); err == nil {
-		t.Errorf("expected error for non-numeric ext_port")
+	if got, err := parsePortForwardRows(blank); err != nil || len(got) != 0 {
+		t.Errorf("blank row should be skipped: got=%+v err=%v", got, err)
+	}
+
+	// Non-numeric ext port is a hard error.
+	bad := url.Values{
+		"pf_proto":    {"tcp"},
+		"pf_ext_port": {"abc"},
+		"pf_to":       {"10.0.0.5"},
+	}
+	if _, err := parsePortForwardRows(bad); err == nil {
+		t.Errorf("expected error for non-numeric ext port")
 	}
 }
 
-func TestParseMasquerade(t *testing.T) {
-	got, err := parseMasquerade("eth0 10.0.0.0/24 # lan\noif=wg0\n")
+func TestParseMasqueradeRows(t *testing.T) {
+	form := url.Values{
+		"mq_oif":     {"eth0", "wg0", ""},
+		"mq_source":  {"10.0.0.0/24", "", ""},
+		"mq_comment": {"lan", "", ""},
+	}
+	got, err := parseMasqueradeRows(form)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -327,18 +355,33 @@ func TestParseMasquerade(t *testing.T) {
 		t.Fatalf("got %d, want 2: %+v", len(got), got)
 	}
 	if got[0].OIF != "eth0" || got[0].Source != "10.0.0.0/24" || got[0].Comment != "lan" {
-		t.Errorf("rule 0 wrong: %+v", got[0])
+		t.Errorf("row 0 wrong: %+v", got[0])
 	}
 	if got[1].OIF != "wg0" || got[1].Source != "" {
-		t.Errorf("rule 1 wrong: %+v", got[1])
+		t.Errorf("row 1 wrong: %+v", got[1])
 	}
-	if _, err := parseMasquerade("# only comment\nsource=1.2.3.0/24\n"); err == nil {
+
+	// Source without oif is invalid.
+	bad := url.Values{
+		"mq_oif":    {""},
+		"mq_source": {"10.0.0.0/24"},
+	}
+	if _, err := parseMasqueradeRows(bad); err == nil {
 		t.Errorf("expected error for missing oif")
 	}
 }
 
-func TestParseMarks(t *testing.T) {
-	got, err := parseMarks("vpn-split set=0x100 daddr=10.50.0.0/16 # split\nvoip set=512 proto=udp dport=5060\n")
+func TestParseMarkRows(t *testing.T) {
+	form := url.Values{
+		"mk_name":    {"vpn-split", "voip"},
+		"mk_set":     {"0x100", "512"},
+		"mk_proto":   {"", "udp"},
+		"mk_dport":   {"", "5060"},
+		"mk_oif":     {"", ""},
+		"mk_daddr":   {"10.50.0.0/16", ""},
+		"mk_comment": {"split", ""},
+	}
+	got, err := parseMarkRows(form)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -346,15 +389,26 @@ func TestParseMarks(t *testing.T) {
 		t.Fatalf("got %d, want 2: %+v", len(got), got)
 	}
 	if got[0].Name != "vpn-split" || got[0].Set != 0x100 || got[0].Daddr != "10.50.0.0/16" || got[0].Comment != "split" {
-		t.Errorf("rule 0 wrong: %+v", got[0])
+		t.Errorf("row 0 wrong: %+v", got[0])
 	}
 	if got[1].Name != "voip" || got[1].Set != 512 || got[1].Proto != "udp" || got[1].DPort != 5060 {
-		t.Errorf("rule 1 wrong: %+v", got[1])
+		t.Errorf("row 1 wrong: %+v", got[1])
 	}
-	if _, err := parseMarks("noset\n"); err == nil {
-		t.Errorf("expected error for missing set=")
+
+	// Missing set value rejected.
+	bad := url.Values{
+		"mk_name": {"vpn"},
+		"mk_set":  {""},
 	}
-	if _, err := parseMarks("bad set=notanint\n"); err == nil {
+	if _, err := parseMarkRows(bad); err == nil {
+		t.Errorf("expected error for missing set value")
+	}
+	// Bad numeric set rejected.
+	bad2 := url.Values{
+		"mk_name": {"vpn"},
+		"mk_set":  {"notanint"},
+	}
+	if _, err := parseMarkRows(bad2); err == nil {
 		t.Errorf("expected error for bad set value")
 	}
 }

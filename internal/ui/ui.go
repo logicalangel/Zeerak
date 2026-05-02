@@ -38,6 +38,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -338,18 +339,19 @@ type presetForm struct {
 	OutBlockRefs  string // newline/comma-separated NamedBlockSet names (v0.3 §10 #7)
 	BlockSetsRaw  string // each line "setname cidr"; repeated names accumulate (v0.3 §10 #7)
 
-	// v0.4 nftables-native scope (NAT, policy-routing marks, conntrack helpers).
-	// Each *Raw is a textarea — one rule per line. See parsePortForwards /
-	// parseMasquerade / parseMarks for the per-line grammar.
-	PortForwardsRaw string
-	MasqueradeRaw   string
-	MarksRaw        string
-	CTHelperFTP     bool
-	CTHelperSIP     bool
-	CTHelperTFTP    bool
-	CTHelperPPTP    bool
-	CTHelperIRC     bool
-	CTHelperH323    bool
+	// v0.4 nftables-native scope (NAT, policy-routing marks, conntrack
+	// helpers). Each list is rendered as a structured row table in the panel
+	// — one HTML row per slice element — and round-tripped via repeated
+	// indexed POST fields. See parsePresetForm below for the field names.
+	PortForwards []policy.PortForward
+	Masquerades  []policy.Masquerade
+	Marks        []policy.Mark
+	CTHelperFTP  bool
+	CTHelperSIP  bool
+	CTHelperTFTP bool
+	CTHelperPPTP bool
+	CTHelperIRC  bool
+	CTHelperH323 bool
 }
 
 func splitCIDRs(s string) []string {
@@ -427,228 +429,31 @@ func parseBlockSets(s string) []policy.NamedBlockSet {
 	return out
 }
 
-// stripComment splits a line at the first '#' returning (body, comment).
-// Both halves are trimmed; comment never includes the '#'.
-func stripComment(line string) (body, comment string) {
-	if i := strings.IndexByte(line, '#'); i >= 0 {
-		return strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
-	}
-	return strings.TrimSpace(line), ""
-}
-
-// parseKVTokens splits a line into positional tokens and key=value tokens.
-// Tokens are separated by whitespace. Used by the v0.4 routing parsers.
-func parseKVTokens(s string) (positional []string, kv map[string]string) {
-	kv = map[string]string{}
-	for _, tok := range strings.Fields(s) {
-		if i := strings.IndexByte(tok, '='); i > 0 {
-			kv[strings.ToLower(tok[:i])] = tok[i+1:]
-		} else {
-			positional = append(positional, tok)
-		}
-	}
-	return positional, kv
-}
-
-// parsePortForwards parses the "port forwards" textarea. Each non-empty,
-// non-comment line is one rule:
+// readRowColumns extracts aligned column slices from a posted form. Every
+// row in the structured-row UIs (NAT, marks, …) is rendered as a parallel
+// set of repeated inputs sharing the same row index, e.g.
 //
-//	[proto] <ext_port> <to>[:<to_port>] [iif=<iface>] [from=<cidr>]
+//	pf_proto=tcp&pf_ext_port=8080&pf_to=10.0.0.5&pf_to_port=80
+//	pf_proto=udp&pf_ext_port=53 &pf_to=10.0.0.10&pf_to_port=
 //
-// Defaults: proto=tcp, to_port=ext_port. Trailing "# comment" preserved.
-func parsePortForwards(s string) ([]policy.PortForward, error) {
-	var out []policy.PortForward
-	for ln, raw := range strings.Split(s, "\n") {
-		body, comment := stripComment(raw)
-		if body == "" {
-			continue
+// readRowColumns returns one string slice per requested key, all padded to
+// the longest column so callers can index them in lockstep.
+func readRowColumns(form url.Values, keys ...string) [][]string {
+	cols := make([][]string, len(keys))
+	n := 0
+	for i, k := range keys {
+		cols[i] = form[k]
+		if len(cols[i]) > n {
+			n = len(cols[i])
 		}
-		pos, kv := parseKVTokens(body)
-		if len(pos) < 2 {
-			return nil, fmt.Errorf("port_forwards line %d: need at least \"<ext_port> <to>\"", ln+1)
-		}
-		pf := policy.PortForward{Comment: comment, IIF: kv["iif"], From: kv["from"]}
-		idx := 0
-		// Optional leading proto.
-		switch strings.ToLower(pos[0]) {
-		case "tcp", "udp":
-			pf.Proto = strings.ToLower(pos[0])
-			idx = 1
-		}
-		if len(pos)-idx < 2 {
-			return nil, fmt.Errorf("port_forwards line %d: missing ext_port or to", ln+1)
-		}
-		n, err := strconv.Atoi(pos[idx])
-		if err != nil {
-			return nil, fmt.Errorf("port_forwards line %d: ext_port: %w", ln+1, err)
-		}
-		pf.ExtPort = n
-		dest := pos[idx+1]
-		if i := strings.LastIndexByte(dest, ':'); i >= 0 && !strings.Contains(dest[:i], ":") {
-			// "addr:port" (avoids matching v6 colons; we mandate plain IPv4 anyway)
-			pf.To = dest[:i]
-			tp, err := strconv.Atoi(dest[i+1:])
-			if err != nil {
-				return nil, fmt.Errorf("port_forwards line %d: to_port: %w", ln+1, err)
-			}
-			pf.ToPort = tp
-		} else {
-			pf.To = dest
-		}
-		out = append(out, pf)
 	}
-	return out, nil
-}
-
-// parseMasquerade parses the masquerade textarea. Each line is:
-//
-//	<oif> [<source-cidr>] [# comment]
-//
-// or with kv form: "oif=<iface> source=<cidr>".
-func parseMasquerade(s string) ([]policy.Masquerade, error) {
-	var out []policy.Masquerade
-	for ln, raw := range strings.Split(s, "\n") {
-		body, comment := stripComment(raw)
-		if body == "" {
-			continue
+	for i := range cols {
+		if len(cols[i]) < n {
+			pad := make([]string, n-len(cols[i]))
+			cols[i] = append(cols[i], pad...)
 		}
-		pos, kv := parseKVTokens(body)
-		m := policy.Masquerade{Comment: comment, OIF: kv["oif"], Source: kv["source"]}
-		if m.OIF == "" && len(pos) > 0 {
-			m.OIF = pos[0]
-			pos = pos[1:]
-		}
-		if m.Source == "" && len(pos) > 0 {
-			m.Source = pos[0]
-		}
-		if m.OIF == "" {
-			return nil, fmt.Errorf("masquerade line %d: missing oif", ln+1)
-		}
-		out = append(out, m)
 	}
-	return out, nil
-}
-
-// parseMarks parses the marks textarea. Each line:
-//
-//	<name> set=<value> [proto=tcp|udp] [dport=<n>] [oif=<iface>] [daddr=<cidr>] [# comment]
-//
-// `set` accepts decimal or 0x-hex.
-func parseMarks(s string) ([]policy.Mark, error) {
-	var out []policy.Mark
-	for ln, raw := range strings.Split(s, "\n") {
-		body, comment := stripComment(raw)
-		if body == "" {
-			continue
-		}
-		pos, kv := parseKVTokens(body)
-		if len(pos) == 0 {
-			return nil, fmt.Errorf("marks line %d: missing name", ln+1)
-		}
-		m := policy.Mark{
-			Name:    pos[0],
-			Proto:   kv["proto"],
-			OIF:     kv["oif"],
-			Daddr:   kv["daddr"],
-			Comment: comment,
-		}
-		setRaw, ok := kv["set"]
-		if !ok {
-			return nil, fmt.Errorf("marks line %d: set=<value> required", ln+1)
-		}
-		v, err := strconv.ParseUint(setRaw, 0, 32)
-		if err != nil {
-			return nil, fmt.Errorf("marks line %d: set: %w", ln+1, err)
-		}
-		m.Set = uint32(v)
-		if dp, ok := kv["dport"]; ok {
-			n, err := strconv.Atoi(dp)
-			if err != nil {
-				return nil, fmt.Errorf("marks line %d: dport: %w", ln+1, err)
-			}
-			m.DPort = n
-		}
-		out = append(out, m)
-	}
-	return out, nil
-}
-
-// formatPortForwards renders a slice back to the textarea form used by parsePortForwards.
-func formatPortForwards(in []policy.PortForward) string {
-	if len(in) == 0 {
-		return ""
-	}
-	var lines []string
-	for _, pf := range in {
-		var b strings.Builder
-		if pf.Proto != "" {
-			b.WriteString(pf.Proto)
-			b.WriteByte(' ')
-		}
-		fmt.Fprintf(&b, "%d %s", pf.ExtPort, pf.To)
-		if pf.ToPort != 0 && pf.ToPort != pf.ExtPort {
-			fmt.Fprintf(&b, ":%d", pf.ToPort)
-		}
-		if pf.IIF != "" {
-			fmt.Fprintf(&b, " iif=%s", pf.IIF)
-		}
-		if pf.From != "" {
-			fmt.Fprintf(&b, " from=%s", pf.From)
-		}
-		if pf.Comment != "" {
-			fmt.Fprintf(&b, " # %s", pf.Comment)
-		}
-		lines = append(lines, b.String())
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatMasquerade(in []policy.Masquerade) string {
-	if len(in) == 0 {
-		return ""
-	}
-	var lines []string
-	for _, m := range in {
-		var b strings.Builder
-		b.WriteString(m.OIF)
-		if m.Source != "" {
-			b.WriteByte(' ')
-			b.WriteString(m.Source)
-		}
-		if m.Comment != "" {
-			fmt.Fprintf(&b, " # %s", m.Comment)
-		}
-		lines = append(lines, b.String())
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatMarks(in []policy.Mark) string {
-	if len(in) == 0 {
-		return ""
-	}
-	var lines []string
-	for _, m := range in {
-		var b strings.Builder
-		fmt.Fprintf(&b, "%s set=0x%x", m.Name, m.Set)
-		if m.Proto != "" {
-			fmt.Fprintf(&b, " proto=%s", m.Proto)
-		}
-		if m.DPort != 0 {
-			fmt.Fprintf(&b, " dport=%d", m.DPort)
-		}
-		if m.OIF != "" {
-			fmt.Fprintf(&b, " oif=%s", m.OIF)
-		}
-		if m.Daddr != "" {
-			fmt.Fprintf(&b, " daddr=%s", m.Daddr)
-		}
-		if m.Comment != "" {
-			fmt.Fprintf(&b, " # %s", m.Comment)
-		}
-		lines = append(lines, b.String())
-	}
-	return strings.Join(lines, "\n")
+	return cols
 }
 
 func (f presetForm) toPresets() (policy.Presets, error) {
@@ -691,22 +496,10 @@ func (f presetForm) toPresets() (policy.Presets, error) {
 	if out, ok := f.toOutbound(); ok {
 		p.Outbound = out
 	}
-	// v0.4 routing/NAT/ct: parse the textareas + boolean helpers.
-	pfs, err := parsePortForwards(f.PortForwardsRaw)
-	if err != nil {
-		return policy.Presets{}, err
-	}
-	p.PortForwards = pfs
-	masq, err := parseMasquerade(f.MasqueradeRaw)
-	if err != nil {
-		return policy.Presets{}, err
-	}
-	p.Masquerade = masq
-	marks, err := parseMarks(f.MarksRaw)
-	if err != nil {
-		return policy.Presets{}, err
-	}
-	p.Marks = marks
+	// v0.4 routing/NAT/ct: structured slices already.
+	p.PortForwards = append([]policy.PortForward(nil), f.PortForwards...)
+	p.Masquerade = append([]policy.Masquerade(nil), f.Masquerades...)
+	p.Marks = append([]policy.Mark(nil), f.Marks...)
 	if f.CTHelperFTP || f.CTHelperSIP || f.CTHelperTFTP || f.CTHelperPPTP || f.CTHelperIRC || f.CTHelperH323 {
 		p.CTHelpers = &policy.CTHelpers{
 			FTP:  f.CTHelperFTP,
@@ -808,6 +601,19 @@ func parsePresetForm(r *http.Request) (presetForm, error) {
 	mailIMAPS := r.PostFormValue("mail_imaps") == "on"
 	mailPOP3S := r.PostFormValue("mail_pop3s") == "on"
 
+	pfs, err := parsePortForwardRows(r.PostForm)
+	if err != nil {
+		return presetForm{}, err
+	}
+	masq, err := parseMasqueradeRows(r.PostForm)
+	if err != nil {
+		return presetForm{}, err
+	}
+	marks, err := parseMarkRows(r.PostForm)
+	if err != nil {
+		return presetForm{}, err
+	}
+
 	return presetForm{
 		DefaultDenyInbound: r.PostFormValue("default_deny_inbound") == "on",
 		SSHEnabled:         sshEnabled,
@@ -835,16 +641,115 @@ func parsePresetForm(r *http.Request) (presetForm, error) {
 		OutBlockRefs:       r.PostFormValue("out_block_refs"),
 		BlockSetsRaw:       r.PostFormValue("block_sets_raw"),
 
-		PortForwardsRaw: r.PostFormValue("port_forwards_raw"),
-		MasqueradeRaw:   r.PostFormValue("masquerade_raw"),
-		MarksRaw:        r.PostFormValue("marks_raw"),
-		CTHelperFTP:     r.PostFormValue("ct_helper_ftp") == "on",
-		CTHelperSIP:     r.PostFormValue("ct_helper_sip") == "on",
-		CTHelperTFTP:    r.PostFormValue("ct_helper_tftp") == "on",
-		CTHelperPPTP:    r.PostFormValue("ct_helper_pptp") == "on",
-		CTHelperIRC:     r.PostFormValue("ct_helper_irc") == "on",
-		CTHelperH323:    r.PostFormValue("ct_helper_h323") == "on",
+		PortForwards: pfs,
+		Masquerades:  masq,
+		Marks:        marks,
+		CTHelperFTP:  r.PostFormValue("ct_helper_ftp") == "on",
+		CTHelperSIP:  r.PostFormValue("ct_helper_sip") == "on",
+		CTHelperTFTP: r.PostFormValue("ct_helper_tftp") == "on",
+		CTHelperPPTP: r.PostFormValue("ct_helper_pptp") == "on",
+		CTHelperIRC:  r.PostFormValue("ct_helper_irc") == "on",
+		CTHelperH323: r.PostFormValue("ct_helper_h323") == "on",
 	}, nil
+}
+
+// parsePortForwardRows reads the indexed POST fields produced by the
+// NAT editor's row UI. Each row owns one slot in every parallel column;
+// rows whose only meaningful field is empty are skipped silently so
+// "+ Add" buttons that left blank rows behind don't fail validation.
+func parsePortForwardRows(form url.Values) ([]policy.PortForward, error) {
+	cols := readRowColumns(form, "pf_proto", "pf_ext_port", "pf_to", "pf_to_port", "pf_iif", "pf_from", "pf_comment")
+	proto, ext, to, toPort, iif, from, cmt := cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6]
+	var out []policy.PortForward
+	for i := range proto {
+		if strings.TrimSpace(ext[i]) == "" && strings.TrimSpace(to[i]) == "" {
+			continue
+		}
+		pf := policy.PortForward{
+			Proto:   strings.TrimSpace(strings.ToLower(proto[i])),
+			To:      strings.TrimSpace(to[i]),
+			IIF:     strings.TrimSpace(iif[i]),
+			From:    strings.TrimSpace(from[i]),
+			Comment: strings.TrimSpace(cmt[i]),
+		}
+		extStr := strings.TrimSpace(ext[i])
+		if extStr == "" {
+			return nil, fmt.Errorf("port forward row %d: external port required", i+1)
+		}
+		n, err := strconv.Atoi(extStr)
+		if err != nil {
+			return nil, fmt.Errorf("port forward row %d: external port: %w", i+1, err)
+		}
+		pf.ExtPort = n
+		if tp := strings.TrimSpace(toPort[i]); tp != "" {
+			n, err := strconv.Atoi(tp)
+			if err != nil {
+				return nil, fmt.Errorf("port forward row %d: internal port: %w", i+1, err)
+			}
+			pf.ToPort = n
+		}
+		out = append(out, pf)
+	}
+	return out, nil
+}
+
+func parseMasqueradeRows(form url.Values) ([]policy.Masquerade, error) {
+	cols := readRowColumns(form, "mq_oif", "mq_source", "mq_comment")
+	oif, src, cmt := cols[0], cols[1], cols[2]
+	var out []policy.Masquerade
+	for i := range oif {
+		o := strings.TrimSpace(oif[i])
+		s := strings.TrimSpace(src[i])
+		c := strings.TrimSpace(cmt[i])
+		if o == "" && s == "" {
+			continue
+		}
+		if o == "" {
+			return nil, fmt.Errorf("masquerade row %d: outbound interface required", i+1)
+		}
+		out = append(out, policy.Masquerade{OIF: o, Source: s, Comment: c})
+	}
+	return out, nil
+}
+
+func parseMarkRows(form url.Values) ([]policy.Mark, error) {
+	cols := readRowColumns(form, "mk_name", "mk_set", "mk_proto", "mk_dport", "mk_oif", "mk_daddr", "mk_comment")
+	name, set, proto, dport, oif, daddr, cmt := cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6]
+	var out []policy.Mark
+	for i := range name {
+		n := strings.TrimSpace(name[i])
+		s := strings.TrimSpace(set[i])
+		if n == "" && s == "" {
+			continue
+		}
+		if n == "" {
+			return nil, fmt.Errorf("mark row %d: name required", i+1)
+		}
+		if s == "" {
+			return nil, fmt.Errorf("mark row %d: set value required", i+1)
+		}
+		v, err := strconv.ParseUint(s, 0, 32)
+		if err != nil {
+			return nil, fmt.Errorf("mark row %d: set: %w", i+1, err)
+		}
+		m := policy.Mark{
+			Name:    n,
+			Set:     uint32(v),
+			Proto:   strings.TrimSpace(strings.ToLower(proto[i])),
+			OIF:     strings.TrimSpace(oif[i]),
+			Daddr:   strings.TrimSpace(daddr[i]),
+			Comment: strings.TrimSpace(cmt[i]),
+		}
+		if dp := strings.TrimSpace(dport[i]); dp != "" {
+			n, err := strconv.Atoi(dp)
+			if err != nil {
+				return nil, fmt.Errorf("mark row %d: dport: %w", i+1, err)
+			}
+			m.DPort = n
+		}
+		out = append(out, m)
+	}
+	return out, nil
 }
 
 func (h *Handler) presetsForm(w http.ResponseWriter, r *http.Request) {
@@ -941,9 +846,9 @@ func presetFormFromPresets(p policy.Presets) presetForm {
 		}
 		f.BlockSetsRaw = strings.Join(lines, "\n")
 	}
-	f.PortForwardsRaw = formatPortForwards(p.PortForwards)
-	f.MasqueradeRaw = formatMasquerade(p.Masquerade)
-	f.MarksRaw = formatMarks(p.Marks)
+	f.PortForwards = append([]policy.PortForward(nil), p.PortForwards...)
+	f.Masquerades = append([]policy.Masquerade(nil), p.Masquerade...)
+	f.Marks = append([]policy.Mark(nil), p.Marks...)
 	if p.CTHelpers != nil {
 		f.CTHelperFTP = p.CTHelpers.FTP
 		f.CTHelperSIP = p.CTHelpers.SIP
