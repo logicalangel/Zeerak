@@ -13,6 +13,7 @@
 </section>
 
 <form method="post" action="/ui/presets/preview" class="es-form">
+  {{if $p.Ifaces}}<datalist id="iface-list">{{range $p.Ifaces}}<option value="{{.}}">{{end}}</datalist>{{end}}
   {{/* hidden inputs for OTHER services so they round-trip unchanged */}} {{if
   ne $kind "protection"}}
   <input
@@ -829,7 +830,7 @@
           <input class="input small" type="number" min="1" max="65535" name="pf_ext_port" value="{{$pf.ExtPort}}" placeholder="8080" aria-label="External port" />
           <input class="input mono"  type="text"   name="pf_to"        value="{{$pf.To}}"      placeholder="10.0.0.5" aria-label="Internal address" />
           <input class="input small" type="number" min="1" max="65535" name="pf_to_port" value="{{if $pf.ToPort}}{{$pf.ToPort}}{{end}}" placeholder="80" aria-label="Internal port" />
-          <input class="input small" type="text"   name="pf_iif"       value="{{$pf.IIF}}"     placeholder="eth0" aria-label="Inbound interface" />
+          <input class="input small" type="text"   name="pf_iif"       value="{{$pf.IIF}}"     placeholder="eth0" aria-label="Inbound interface" list="iface-list" />
           <input class="input mono"  type="text"   name="pf_from"      value="{{$pf.From}}"    placeholder="0.0.0.0/0" aria-label="Source CIDR" />
           <input class="input"       type="text"   name="pf_comment"   value="{{$pf.Comment}}" placeholder="why?" aria-label="Comment" />
           <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
@@ -859,7 +860,7 @@
       <div class="row-table-body" data-rows-body>
         {{range $i, $mq := $f.Masquerades}}
         <div class="row-table-row row-table-row-mq">
-          <input class="input small" type="text" name="mq_oif"     value="{{$mq.OIF}}"     placeholder="eth0" aria-label="Egress interface" />
+          <input class="input small" type="text" name="mq_oif"     value="{{$mq.OIF}}"     placeholder="eth0" aria-label="Egress interface" list="iface-list" />
           <input class="input mono"  type="text" name="mq_source"  value="{{$mq.Source}}"  placeholder="10.0.0.0/24" aria-label="Source CIDR" />
           <input class="input"       type="text" name="mq_comment" value="{{$mq.Comment}}" placeholder="why?" aria-label="Comment" />
           <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
@@ -909,7 +910,7 @@
             <option value="udp" {{if eq $mk.Proto "udp"}}selected{{end}}>udp</option>
           </select>
           <input class="input small" type="number" min="1" max="65535" name="mk_dport" value="{{if $mk.DPort}}{{$mk.DPort}}{{end}}" placeholder="5060" aria-label="Port" />
-          <input class="input small" type="text"   name="mk_oif"     value="{{$mk.OIF}}"     placeholder="wg0" aria-label="Send via interface" />
+          <input class="input small" type="text"   name="mk_oif"     value="{{$mk.OIF}}"     placeholder="wg0" aria-label="Send via interface" list="iface-list" />
           <input class="input mono"  type="text"   name="mk_daddr"   value="{{$mk.Daddr}}"   placeholder="10.50.0.0/16" aria-label="Destination" />
           <input class="input"       type="text"   name="mk_comment" value="{{$mk.Comment}}" placeholder="e.g. route VoIP via ISP2" aria-label="Note" />
           <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
@@ -1005,7 +1006,7 @@
       <input class="input small" type="number" min="1" max="65535" name="pf_ext_port" placeholder="8080" aria-label="External port" />
       <input class="input mono"  type="text"   name="pf_to"        placeholder="10.0.0.5" aria-label="Internal address" />
       <input class="input small" type="number" min="1" max="65535" name="pf_to_port" placeholder="80" aria-label="Internal port" />
-      <input class="input small" type="text"   name="pf_iif"       placeholder="eth0" aria-label="Inbound interface" />
+      <input class="input small" type="text"   name="pf_iif"       placeholder="eth0" aria-label="Inbound interface" list="iface-list" />
       <input class="input mono"  type="text"   name="pf_from"      placeholder="0.0.0.0/0" aria-label="Source CIDR" />
       <input class="input"       type="text"   name="pf_comment"   placeholder="why?" aria-label="Comment" />
       <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
@@ -1013,7 +1014,7 @@
   </template>
   <template id="mq-row-template">
     <div class="row-table-row row-table-row-mq">
-      <input class="input small" type="text" name="mq_oif"     placeholder="eth0" aria-label="Egress interface" />
+      <input class="input small" type="text" name="mq_oif"     placeholder="eth0" aria-label="Egress interface" list="iface-list" />
       <input class="input mono"  type="text" name="mq_source"  placeholder="10.0.0.0/24" aria-label="Source CIDR" />
       <input class="input"       type="text" name="mq_comment" placeholder="why?" aria-label="Comment" />
       <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
@@ -1029,7 +1030,7 @@
         <option value="udp">udp</option>
       </select>
       <input class="input small" type="number" min="1" max="65535" name="mk_dport" placeholder="5060" aria-label="Destination port" />
-      <input class="input small" type="text"   name="mk_oif"     placeholder="wg0" aria-label="Send via interface" />
+      <input class="input small" type="text"   name="mk_oif"     placeholder="wg0" aria-label="Send via interface" list="iface-list" />
       <input class="input mono"  type="text"   name="mk_daddr"   placeholder="10.50.0.0/16" aria-label="Destination" />
       <input class="input"       type="text"   name="mk_comment" placeholder="e.g. route VoIP via ISP2" aria-label="Note" />
       <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>

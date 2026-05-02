@@ -1097,7 +1097,6 @@ input[type="number"].input {
 }
 
 .es-form {
-  max-width: 720px;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -1480,14 +1479,14 @@ input[type="number"].input {
 .row-table-row {
   display: grid;
   grid-template-columns:
-    minmax(80px, 0.7fr)   /* proto */
-    minmax(90px, 0.7fr)   /* ext port */
-    minmax(140px, 1.3fr)  /* to addr */
-    minmax(90px, 0.7fr)   /* to port */
-    minmax(100px, 0.9fr)  /* iif */
-    minmax(140px, 1.2fr)  /* from cidr */
-    minmax(120px, 1.4fr)  /* comment */
-    auto;                 /* remove */
+    minmax(80px, 0.7fr) /* proto */
+    minmax(90px, 0.7fr) /* ext port */
+    minmax(140px, 1.3fr) /* to addr */
+    minmax(90px, 0.7fr) /* to port */
+    minmax(100px, 0.9fr) /* iif */
+    minmax(140px, 1.2fr) /* from cidr */
+    minmax(120px, 1.4fr) /* comment */
+    auto; /* remove */
   gap: 0.5rem;
   align-items: center;
 }
@@ -1509,13 +1508,13 @@ input[type="number"].input {
 .row-table-head-mk,
 .row-table-row-mk {
   grid-template-columns:
-    minmax(120px, 1fr)    /* name */
-    minmax(110px, 0.9fr)  /* set */
-    minmax(80px, 0.6fr)   /* proto */
-    minmax(90px, 0.7fr)   /* dport */
-    minmax(100px, 0.8fr)  /* oif */
-    minmax(140px, 1.2fr)  /* daddr */
-    minmax(120px, 1.4fr)  /* comment */
+    minmax(120px, 1fr) /* name */
+    minmax(110px, 0.9fr) /* set */
+    minmax(80px, 0.6fr) /* proto */
+    minmax(90px, 0.7fr) /* dport */
+    minmax(100px, 0.8fr) /* oif */
+    minmax(140px, 1.2fr) /* daddr */
+    minmax(120px, 1.4fr) /* comment */
     auto;
 }
 .row-table-row {
@@ -1552,14 +1551,21 @@ input[type="number"].input {
   margin-top: 0.25rem;
 }
 @media (max-width: 900px) {
-  .row-table-head { display: none; }
+  .row-table-head {
+    display: none;
+  }
   .row-table-row,
   .row-table-row-mq,
   .row-table-row-mk {
     grid-template-columns: 1fr 1fr auto;
   }
-  .row-table-row > .input { grid-column: span 2; }
-  .row-table-row > .row-remove { grid-column: 3; grid-row: 1; }
+  .row-table-row > .input {
+    grid-column: span 2;
+  }
+  .row-table-row > .row-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }
 
 /* ─── v0.4 conntrack helper card grid ───────────────────────────────── */
@@ -1578,7 +1584,9 @@ input[type="number"].input {
   border-radius: 0.6rem;
   padding: 0.75rem 0.85rem;
   cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .ct-card:hover {
   border-color: var(--ring, var(--primary));
@@ -1632,15 +1640,17 @@ input[type="number"].input {
   color: var(--muted);
   text-decoration: none;
   line-height: 1;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .nav-network .nav-link:hover {
   color: var(--fg);
-  background: var(--bg-elev, rgba(0,0,0,0.04));
+  background: var(--bg-elev, rgba(0, 0, 0, 0.04));
 }
 .nav-network .nav-link.is-active {
   color: var(--fg);
-  background: var(--bg-elev, rgba(0,0,0,0.06));
+  background: var(--bg-elev, rgba(0, 0, 0, 0.06));
 }
 .nav-network .nav-badge {
   display: inline-flex;
@@ -1660,6 +1670,11 @@ input[type="number"].input {
   background: var(--muted, #6b7280);
 }
 @media (max-width: 720px) {
-  .nav-network .nav-link { padding: 0.3rem 0.55rem; font-size: 0.8rem; }
-  .nav-network { margin-left: 0.25rem; }
+  .nav-network .nav-link {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.8rem;
+  }
+  .nav-network {
+    margin-left: 0.25rem;
+  }
 }

@@ -20,6 +20,7 @@ presets:
     #   - 2001:db8::/32
   caddy_box: true # opens TCP/80 + TCP/443
 
+
   # --- Network features (v0.4) -------------------------------------------
   # All optional; each compiles into its own nftables table:
   #   port_forwards/masquerade -> ip   zeerak-nat

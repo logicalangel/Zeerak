@@ -37,6 +37,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -876,6 +877,12 @@ func (h *Handler) editService(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	var ifaceNames []string
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, iface := range ifaces {
+			ifaceNames = append(ifaceNames, iface.Name)
+		}
+	}
 	h.render(w, r, "edit-service.html", baseData{
 		Title: meta.Name,
 		Page: map[string]any{
@@ -884,6 +891,7 @@ func (h *Handler) editService(w http.ResponseWriter, r *http.Request) {
 			"Name":     meta.Name,
 			"Subtitle": meta.Subtitle,
 			"Form":     presetFormFromPresets(h.currentPresets()),
+			"Ifaces":   ifaceNames,
 		},
 	})
 }
