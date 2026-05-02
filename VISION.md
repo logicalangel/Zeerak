@@ -257,10 +257,10 @@ The assistant proposes; the human commits. Always.
 
 ### Later
 
-- [ ] **NAT & port-forward UI** — SNAT/DNAT/masquerade/redirect with hairpin presets ("home router box")
-- [ ] **Policy routing marks** — `meta mark` / `ct mark` editor with split-tunnel and QoS presets
-- [ ] **Conntrack helpers & zones** — surface `ct helper`, zones, custom timeouts
-- [ ] IPv6 parity audit
+- [~] **NAT & port-forward** — DNAT/masquerade compile under `presets.port_forwards` / `presets.masquerade` into `ip zeerak-nat`; edit-form UI + hairpin/redirect presets pending (v0.5)
+- [~] **Policy routing marks** — `presets.marks` compile into `inet zeerak-marks` (route hook); split-tunnel / QoS preset UI pending (v0.5)
+- [~] **Conntrack helpers & zones** — `presets.ct_helpers` (ftp/sip/tftp/pptp/irc/h323) compile into `inet zeerak-ct`; zones + custom timeouts pending (v0.5)
+- [ ] IPv6 parity audit (NAT table is currently IPv4-only by design; nft/ip6 NAT story TBD)
 - [ ] Cluster: push sync, drift auto-heal, group templates
 - [ ] microVM-based test kit on self-hosted CI
 - [ ] Plugin system for custom presets
