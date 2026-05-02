@@ -65,38 +65,6 @@
   </div>
 </section>
 
-{{with $page.Routing}}
-<section class="services-section integrations-section">
-  <header class="services-header">
-    <div>
-      <h2>Network features</h2>
-      <p class="muted">nftables-native: NAT, policy-routing marks, conntrack helpers.</p>
-    </div>
-  </header>
-  <div class="integrations-row">
-    {{if .PortForwards}}
-      <a class="chip chip-info" href="/edit/nat" title="Port forwards (DNAT) configured under presets.port_forwards">{{.PortForwards}} port forward{{if ne .PortForwards 1}}s{{end}}</a>
-    {{else}}
-      <a class="chip chip-ghost" href="/edit/nat" title="Add NAT / port-forward rules">+ NAT &amp; port forwards</a>
-    {{end}}
-    {{if .Masquerades}}
-      <a class="chip chip-info" href="/edit/nat" title="Masquerade rules under presets.masquerade">{{.Masquerades}} masquerade{{if ne .Masquerades 1}}s{{end}}</a>
-    {{end}}
-    {{if .Marks}}
-      <a class="chip chip-info" href="/edit/marks" title="Policy-routing mark rules (presets.marks)">{{.Marks}} mark rule{{if ne .Marks 1}}s{{end}}</a>
-    {{else}}
-      <a class="chip chip-ghost" href="/edit/marks" title="Add policy-routing fwmarks">+ Marks</a>
-    {{end}}
-    {{if .CTHelpers}}
-      <a class="chip chip-info" href="/edit/ct" title="Conntrack helpers attached at canonical ports">ct helpers: {{range $i,$h := .CTHelpers}}{{if $i}}, {{end}}{{$h}}{{end}}</a>
-    {{else}}
-      <a class="chip chip-ghost" href="/edit/ct" title="Attach conntrack helpers (ftp, sip, …)">+ Conntrack helpers</a>
-    {{end}}
-  </div>
-  <p class="muted small">These compile into separate tables: <code>ip zeerak-nat</code>, <code>inet zeerak-marks</code>, <code>inet zeerak-ct</code>. Click any chip to edit, or configure under <code>presets:</code> in <code>zeerak.yaml</code>.</p>
-</section>
-{{end}}
-
 <section class="services">
   <header class="services-header">
     <div>

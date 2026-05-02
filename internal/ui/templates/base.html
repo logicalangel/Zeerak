@@ -16,6 +16,17 @@
           <img class="brand-mark" src="/static/logo.svg" alt="" />
           <span class="brand-name">Zeerak</span>
         </a>
+        <nav class="nav nav-network" aria-label="Network features">
+          <a class="nav-link{{if .Routing.PortForwards}} is-active{{end}}" href="/edit/nat" title="NAT &amp; port forwards (DNAT/masquerade)">
+            NAT{{if .Routing.PortForwards}} <span class="nav-badge">{{.Routing.PortForwards}}</span>{{end}}{{if .Routing.Masquerades}} <span class="nav-badge nav-badge-muted" title="masquerade rules">m{{.Routing.Masquerades}}</span>{{end}}
+          </a>
+          <a class="nav-link{{if .Routing.Marks}} is-active{{end}}" href="/edit/marks" title="Policy-routing fwmarks">
+            Marks{{if .Routing.Marks}} <span class="nav-badge">{{.Routing.Marks}}</span>{{end}}
+          </a>
+          <a class="nav-link{{if .Routing.CTHelpers}} is-active{{end}}" href="/edit/ct" title="Conntrack helpers (ftp, sip, …)">
+            CT{{if .Routing.CTHelpers}} <span class="nav-badge">{{len .Routing.CTHelpers}}</span>{{end}}
+          </a>
+        </nav>
         <nav class="nav">
           <a href="/activity">Activity</a>
         </nav>

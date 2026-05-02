@@ -1609,3 +1609,63 @@ input[type="number"].input {
   font-size: 0.85rem;
   line-height: 1.35;
 }
+
+/* topbar network nav: NAT / Marks / CT chips with active-count badges. */
+.topbar-inner > .nav { flex: 0 1 auto; }
+.nav-network {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem;
+  margin-left: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  flex: 0 0 auto;
+}
+.nav-network .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.nav-network .nav-link:hover {
+  color: var(--fg);
+  background: var(--bg-elev, rgba(0,0,0,0.04));
+}
+.nav-network .nav-link.is-active {
+  color: var(--fg);
+  background: var(--bg-elev, rgba(0,0,0,0.06));
+}
+.nav-network .nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.1rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--primary, #2563eb);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.nav-network .nav-badge-muted {
+  background: var(--muted, #6b7280);
+}
+/* Activity nav sits flush right next to the version chip. */
+.topbar-inner > .nav:not(.nav-network) {
+  margin-left: auto;
+}
+@media (max-width: 720px) {
+  .nav-network .nav-link { padding: 0.3rem 0.55rem; font-size: 0.8rem; }
+  .nav-network { margin-left: 0.25rem; }
+}

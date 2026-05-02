@@ -225,9 +225,10 @@ type baseData struct {
 	Title   string
 	Version string
 	Status  statusVM
-	Flash   string  // info banner (success message after redirect)
-	Error   string  // error banner
-	Page    any     // page-specific payload
+	Routing RoutingVM // nftables-native scope rendered in the topbar nav (NAT/marks/ct)
+	Flash   string    // info banner (success message after redirect)
+	Error   string    // error banner
+	Page    any       // page-specific payload
 }
 
 type statusVM struct {
@@ -272,7 +273,6 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 			"Defense":      defenseSummary(h.currentPresets()),
 			"Counts":       counts,
 			"Integrations": detectIntegrations(r.Context(), h.reader, h.currentPresets()),
-			"Routing":      routingVM(h.currentPresets()),
 		},
 	})
 }
@@ -1028,6 +1028,9 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmpl string, da
 		data.Version = h.version
 	}
 	data.Status = h.status()
+	// Routing chips live in the global topbar; compute once per render so every
+	// page sees the same NAT/marks/ct status without each handler wiring it.
+	data.Routing = routingVM(h.currentPresets())
 	if data.Flash == "" {
 		data.Flash = flashLabel(r.URL.Query().Get("flash"))
 	}
