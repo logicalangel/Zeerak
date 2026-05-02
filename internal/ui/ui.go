@@ -271,6 +271,7 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 			"Defense":      defenseSummary(h.currentPresets()),
 			"Counts":       counts,
 			"Integrations": detectIntegrations(r.Context(), h.reader, h.currentPresets()),
+			"Routing":      routingVM(h.currentPresets()),
 		},
 	})
 }

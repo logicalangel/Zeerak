@@ -49,6 +49,11 @@ func renderTable(w io.Writer, t *model.Table) error {
 	if _, err := fmt.Fprintf(w, "table %s %s {\n", t.Family, t.Name); err != nil {
 		return err
 	}
+	for _, h := range t.Helpers {
+		if err := renderHelper(w, &h); err != nil {
+			return err
+		}
+	}
 	for _, s := range t.Sets {
 		if err := renderSet(w, &s); err != nil {
 			return err
@@ -60,6 +65,13 @@ func renderTable(w io.Writer, t *model.Table) error {
 		}
 	}
 	_, err := fmt.Fprintln(w, "}")
+	return err
+}
+
+func renderHelper(w io.Writer, h *model.CTHelper) error {
+	_, err := fmt.Fprintf(w,
+		"\tct helper %q {\n\t\ttype %q protocol %s;\n\t}\n",
+		h.Name, h.Type, h.L4Proto)
 	return err
 }
 

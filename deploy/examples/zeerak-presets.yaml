@@ -19,3 +19,31 @@ presets:
     #   - 198.51.100.0/24
     #   - 2001:db8::/32
   caddy_box: true # opens TCP/80 + TCP/443
+
+  # --- Network features (v0.4) -------------------------------------------
+  # All optional; each compiles into its own nftables table:
+  #   port_forwards/masquerade -> ip   zeerak-nat
+  #   marks                    -> inet zeerak-marks
+  #   ct_helpers               -> inet zeerak-ct
+  # Leave these blocks out entirely to skip those tables.
+
+  # NAT — DNAT inbound port-forwards to a backend on the LAN.
+  # port_forwards:
+  #   - { proto: tcp, iif: eth0, ext_port: 8080, to: 10.0.0.5, to_port: 80 }
+  #   - { proto: tcp, iif: eth0, ext_port: 2222, to: 10.0.0.5, to_port: 22 }
+
+  # NAT — masquerade (SNAT) for traffic leaving an interface.
+  # masquerade:
+  #   - { oif: eth0, source: 10.0.0.0/24, comment: "LAN -> internet" }
+
+  # Policy-routing marks. `set` is the fwmark value (use `ip rule fwmark …`
+  # in your routing layer to act on it). dport requires proto.
+  # marks:
+  #   - { name: vpn-split, daddr: 10.50.0.0/16, set: 0x100 }
+  #   - { name: voip,      proto: udp, dport: 5060, set: 0x200 }
+
+  # Conntrack helpers — only attach the ones you actually use. Each helper
+  # listens on its canonical port (ftp tcp/21, sip udp/5060, …).
+  # ct_helpers:
+  #   ftp: true
+  #   sip: true

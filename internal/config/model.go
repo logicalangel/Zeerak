@@ -14,11 +14,9 @@ import "github.com/zeerak/zeerak/internal/model"
 // operator wrote in zeerak.yaml is Zeerak-managed. Tables not in the YAML
 // stay untouched on the kernel side.
 func (c *Config) ToRuleset() *model.Ruleset {
-	rs := &model.Ruleset{Tables: make([]model.Table, 0, 1+len(c.Tables))}
+	rs := &model.Ruleset{Tables: make([]model.Table, 0, 4+len(c.Tables))}
 
-	if t := c.Presets.Compile(); t != nil {
-		rs.Tables = append(rs.Tables, *t)
-	}
+	rs.Tables = append(rs.Tables, c.Presets.CompileTables()...)
 
 	for _, t := range c.Tables {
 		mt := model.Table{

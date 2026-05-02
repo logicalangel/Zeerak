@@ -77,6 +77,10 @@ type Table struct {
 	Owned  bool    `json:"owned"  yaml:"owned"`
 	Chains []Chain `json:"chains" yaml:"chains"`
 	Sets   []Set   `json:"sets,omitempty" yaml:"sets,omitempty"`
+	// Helpers declares conntrack helpers (ftp, sip, tftp, …) that rules in
+	// this table can attach via `ct helper set "<name>"`. nftables requires
+	// each helper to be declared once at the table scope.
+	Helpers []CTHelper `json:"helpers,omitempty" yaml:"helpers,omitempty"`
 	// TODO: Maps, Counters, Quotas, Flowtables.
 }
 
@@ -108,4 +112,18 @@ type Set struct {
 	Type     string   `json:"type"     yaml:"type"` // e.g. "ipv4_addr", "inet_service"
 	Flags    []string `json:"flags,omitempty"    yaml:"flags,omitempty"`
 	Elements []string `json:"elements,omitempty" yaml:"elements,omitempty"`
+}
+
+// CTHelper is an nftables conntrack-helper declaration. Renders as:
+//
+//	ct helper "<Name>" {
+//	    type "<Type>" protocol <L4Proto>;
+//	}
+//
+// Type is the kernel helper module name ("ftp", "sip", "tftp", "pptp", …);
+// L4Proto is the transport protocol the helper attaches to ("tcp" or "udp").
+type CTHelper struct {
+	Name    string `json:"name"     yaml:"name"`
+	Type    string `json:"type"     yaml:"type"`
+	L4Proto string `json:"l4proto"  yaml:"l4proto"`
 }

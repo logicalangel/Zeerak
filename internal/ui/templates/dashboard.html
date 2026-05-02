@@ -96,6 +96,34 @@
   </div>
 </section>
 
+{{with $page.Routing}}
+{{if .Active}}
+<section class="services-section integrations-section">
+  <header class="services-header">
+    <div>
+      <h2>Network features</h2>
+      <p class="muted">nftables-native: NAT, policy-routing marks, conntrack helpers.</p>
+    </div>
+  </header>
+  <div class="integrations-row">
+    {{if .PortForwards}}
+      <span class="chip chip-info" title="Port forwards (DNAT) configured under presets.port_forwards">{{.PortForwards}} port forward{{if ne .PortForwards 1}}s{{end}}</span>
+    {{end}}
+    {{if .Masquerades}}
+      <span class="chip chip-info" title="Masquerade rules under presets.masquerade">{{.Masquerades}} masquerade{{if ne .Masquerades 1}}s{{end}}</span>
+    {{end}}
+    {{if .Marks}}
+      <span class="chip chip-info" title="Policy-routing mark rules (presets.marks)">{{.Marks}} mark rule{{if ne .Marks 1}}s{{end}}</span>
+    {{end}}
+    {{if .CTHelpers}}
+      <span class="chip chip-info" title="Conntrack helpers attached at canonical ports">ct helpers: {{range $i,$h := .CTHelpers}}{{if $i}}, {{end}}{{$h}}{{end}}</span>
+    {{end}}
+  </div>
+  <p class="muted small">These compile into separate tables: <code>ip zeerak-nat</code>, <code>inet zeerak-marks</code>, <code>inet zeerak-ct</code>. Edit forms land in v0.5; for now configure under <code>presets:</code> in <code>zeerak.yaml</code>.</p>
+</section>
+{{end}}
+{{end}}
+
 {{with $page.Integrations}}
 {{if or .Tailscale.Detected .WireGuard.Detected .Docker.Detected .Caddy.Detected}}
 <section class="services-section integrations-section">

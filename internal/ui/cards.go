@@ -446,3 +446,50 @@ func (vm IntegrationsVM) withCaddyGaps(allowed map[int]bool) IntegrationsVM {
 	}
 	return vm
 }
+
+// RoutingVM is the dashboard "Network features" section payload — the
+// nftables-native scope from VISION.md §1: NAT/port-forwards, policy
+// routing marks, and conntrack helpers. Each is a count + a short label
+// so the dashboard stays a glance, not a config dump.
+type RoutingVM struct {
+	PortForwards int      // count of `presets.port_forwards`
+	Masquerades  int      // count of `presets.masquerade`
+	Marks        int      // count of `presets.marks`
+	CTHelpers    []string // names of enabled helpers (ftp, sip, …)
+}
+
+// Active reports whether anything in the section is configured.
+func (r RoutingVM) Active() bool {
+	return r.PortForwards > 0 || r.Masquerades > 0 || r.Marks > 0 || len(r.CTHelpers) > 0
+}
+
+func routingVM(p policy.Presets) RoutingVM {
+	vm := RoutingVM{
+		PortForwards: len(p.PortForwards),
+		Masquerades:  len(p.Masquerade),
+		Marks:        len(p.Marks),
+	}
+	if p.CTHelpers != nil {
+		h := *p.CTHelpers
+		// Stable order matches CTHelpers struct field order.
+		if h.FTP {
+			vm.CTHelpers = append(vm.CTHelpers, "ftp")
+		}
+		if h.SIP {
+			vm.CTHelpers = append(vm.CTHelpers, "sip")
+		}
+		if h.TFTP {
+			vm.CTHelpers = append(vm.CTHelpers, "tftp")
+		}
+		if h.PPTP {
+			vm.CTHelpers = append(vm.CTHelpers, "pptp")
+		}
+		if h.IRC {
+			vm.CTHelpers = append(vm.CTHelpers, "irc")
+		}
+		if h.H323 {
+			vm.CTHelpers = append(vm.CTHelpers, "h323")
+		}
+	}
+	return vm
+}

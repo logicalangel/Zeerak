@@ -40,6 +40,13 @@ type Presets struct {
 	Mail               *MailPreset         `yaml:"mail,omitempty"`
 	Outbound           *OutboundPreset     `yaml:"outbound,omitempty"`
 	BlockSets          []NamedBlockSet     `yaml:"block_sets,omitempty"`
+
+	// VISION.md §1 nftables-native scope: NAT, policy-routing marks, and
+	// conntrack helpers. Each compiles into its own table; see routing.go.
+	PortForwards []PortForward `yaml:"port_forwards,omitempty"`
+	Masquerade   []Masquerade  `yaml:"masquerade,omitempty"`
+	Marks        []Mark        `yaml:"marks,omitempty"`
+	CTHelpers    *CTHelpers    `yaml:"ct_helpers,omitempty"`
 }
 
 // NamedBlockSet is a user-named CIDR list (think "country blocks",
@@ -130,10 +137,24 @@ func (o OutboundPreset) Active() bool {
 
 // Empty reports whether no preset is enabled (compile is a no-op).
 func (p Presets) Empty() bool {
-	return !p.DefaultDenyInbound && p.SSH == nil && !p.CaddyBox &&
-		p.Database == nil && (p.Mail == nil || !p.Mail.AnyPort()) &&
-		(p.Outbound == nil || !p.Outbound.Active()) &&
-		len(p.BlockSets) == 0
+	return !p.hasFilterPresets() && !p.hasRoutingPresets()
+}
+
+// hasFilterPresets is true if any inbound/outbound/named-set preset is on,
+// i.e. anything that compiles into the `inet zeerak-presets` table.
+func (p Presets) hasFilterPresets() bool {
+	return p.DefaultDenyInbound || p.SSH != nil || p.CaddyBox ||
+		p.Database != nil || (p.Mail != nil && p.Mail.AnyPort()) ||
+		(p.Outbound != nil && p.Outbound.Active()) ||
+		len(p.BlockSets) > 0
+}
+
+// hasRoutingPresets is true if any NAT/marks/ct-helper preset is on, i.e.
+// anything that compiles into the routing tables (zeerak-nat, zeerak-marks,
+// zeerak-ct).
+func (p Presets) hasRoutingPresets() bool {
+	return len(p.PortForwards) > 0 || len(p.Masquerade) > 0 ||
+		len(p.Marks) > 0 || (p.CTHelpers != nil && p.CTHelpers.AnyEnabled())
 }
 
 // Validate performs cheap sanity checks. Real semantic validation happens
@@ -207,6 +228,9 @@ func (p Presets) Validate() error {
 			}
 		}
 	}
+	if err := p.validateRouting(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -221,7 +245,7 @@ func (p Presets) Validate() error {
 //	  <ssh rules>                           # if ssh
 //	  tcp dport { 80, 443 } accept          # if caddy_box
 func (p Presets) Compile() *model.Table {
-	if p.Empty() {
+	if !p.hasFilterPresets() {
 		return nil
 	}
 
@@ -283,6 +307,33 @@ func (p Presets) Compile() *model.Table {
 		Chains: chains,
 		Sets:   sets,
 	}
+}
+
+// CompileTables returns every table the preset set produces. The classic
+// `inet zeerak-presets` filter table is always first (when non-empty);
+// then, in deterministic order, an `ip zeerak-nat` table for port
+// forwards/masquerade, an `inet zeerak-marks` table for policy routing
+// marks, and an `inet zeerak-ct` table for conntrack-helper attachments.
+//
+// Each is independently emitted only if its inputs are non-empty, so a
+// minimal `presets:` block still renders a minimal ruleset.
+func (p Presets) CompileTables() []model.Table {
+	var out []model.Table
+	if t := p.Compile(); t != nil {
+		out = append(out, *t)
+	}
+	if t := compileNATTable(p.PortForwards, p.Masquerade); t != nil {
+		out = append(out, *t)
+	}
+	if t := compileMarksTable(p.Marks); t != nil {
+		out = append(out, *t)
+	}
+	if p.CTHelpers != nil {
+		if t := compileCTTable(*p.CTHelpers); t != nil {
+			out = append(out, *t)
+		}
+	}
+	return out
 }
 
 // compileBlockSet renders a NamedBlockSet into a model.Set ready for the
