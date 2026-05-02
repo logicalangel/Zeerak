@@ -880,115 +880,116 @@
 
   {{else if eq $kind "marks"}}
   <fieldset class="es-section">
-    <legend>Policy-routing marks</legend>
+    <legend>Traffic routing rules</legend>
     <p class="muted">
-      Tag traffic with an <code>fwmark</code> so a downstream
-      <code>ip rule fwmark &lt;value&gt; lookup &lt;table&gt;</code> can pick a
-      route — split-tunnel VPN, QoS, or steering through a specific egress.
-      Mark values accept decimal or <code>0x</code>-hex.
+      Each rule tags matching packets with a number. Your OS can then send
+      those tagged packets through a specific VPN tunnel, a secondary ISP
+      link, or any custom route — without changing the rest of your traffic.
+      Common use-cases: split-tunnel VPN, failover, QoS shaping.
     </p>
     <div class="row-table row-table-marks" data-rows="mk">
       <div class="row-table-head row-table-head-mk" aria-hidden="true">
-        <span>Name</span>
-        <span>Mark value</span>
-        <span>Proto</span>
-        <span>Dest port</span>
-        <span>Egress iface</span>
-        <span>Dest CIDR</span>
-        <span>Comment</span>
+        <span>Rule name</span>
+        <span>Tag value</span>
+        <span>Protocol</span>
+        <span>Port</span>
+        <span>Send via</span>
+        <span>Destination</span>
+        <span>Note</span>
         <span class="row-actions"></span>
       </div>
       <div class="row-table-body" data-rows-body>
         {{range $i, $mk := $f.Marks}}
         <div class="row-table-row row-table-row-mk">
-          <input class="input small" type="text"   name="mk_name"    value="{{$mk.Name}}" placeholder="vpn-split" aria-label="Name" required />
-          <input class="input small mono" type="text" name="mk_set"  value="0x{{printf "%x" $mk.Set}}" placeholder="0x100" aria-label="Mark value" required />
+          <input class="input small" type="text"   name="mk_name"    value="{{$mk.Name}}" placeholder="vpn-split" aria-label="Rule name" required />
+          <input class="input small mono" type="text" name="mk_set"  value="0x{{printf "%x" $mk.Set}}" placeholder="0x100" aria-label="Tag value" required />
           <select class="input small" name="mk_proto" aria-label="Protocol">
             <option value=""    {{if eq $mk.Proto ""}}selected{{end}}>any</option>
             <option value="tcp" {{if eq $mk.Proto "tcp"}}selected{{end}}>tcp</option>
             <option value="udp" {{if eq $mk.Proto "udp"}}selected{{end}}>udp</option>
           </select>
-          <input class="input small" type="number" min="1" max="65535" name="mk_dport" value="{{if $mk.DPort}}{{$mk.DPort}}{{end}}" placeholder="5060" aria-label="Destination port" />
-          <input class="input small" type="text"   name="mk_oif"     value="{{$mk.OIF}}"     placeholder="wg0" aria-label="Egress interface" />
-          <input class="input mono"  type="text"   name="mk_daddr"   value="{{$mk.Daddr}}"   placeholder="10.50.0.0/16" aria-label="Destination CIDR" />
-          <input class="input"       type="text"   name="mk_comment" value="{{$mk.Comment}}" placeholder="why?" aria-label="Comment" />
+          <input class="input small" type="number" min="1" max="65535" name="mk_dport" value="{{if $mk.DPort}}{{$mk.DPort}}{{end}}" placeholder="5060" aria-label="Port" />
+          <input class="input small" type="text"   name="mk_oif"     value="{{$mk.OIF}}"     placeholder="wg0" aria-label="Send via interface" />
+          <input class="input mono"  type="text"   name="mk_daddr"   value="{{$mk.Daddr}}"   placeholder="10.50.0.0/16" aria-label="Destination" />
+          <input class="input"       type="text"   name="mk_comment" value="{{$mk.Comment}}" placeholder="e.g. route VoIP via ISP2" aria-label="Note" />
           <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
         </div>
         {{end}}
       </div>
       <button type="button" class="btn btn-ghost row-add" data-row-add="mk-row-template" data-row-target="mk">
-        + Add mark rule
+        + Add routing rule
       </button>
     </div>
   </fieldset>
   <p class="muted small">
-    Compiles into <code>inet zeerak-marks</code>, output chain
-    (<code>type route</code>, priority -150). The mark only does something
-    when a matching <code>ip rule</code> exists in your routing layer.
+    Rules are applied in order. <strong>Tag value</strong> is a number (decimal or <code>0x</code>-hex) that
+    you also set in <code>ip rule add fwmark … lookup …</code> on your server.
+    If you haven’t set that up yet, rules here won’t do anything on their own.
   </p>
 
   {{else if eq $kind "ct"}}
   <fieldset class="es-section">
-    <legend>Conntrack helpers</legend>
+    <legend>Protocol helpers</legend>
     <p class="muted">
-      Helpers parse application traffic to open the secondary flows old
-      protocols need (FTP data channel, RTP/RTCP for SIP, …). Only enable the
-      ones you actually use — historically a source of CVEs.
+      Some older protocols open extra connections on dynamically negotiated ports
+      — the firewall can’t know those ports in advance unless you enable the
+      helper for that protocol. Only turn on what you actually use.
     </p>
     <div class="ct-grid">
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_ftp" {{if $f.CTHelperFTP}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">FTP</span>
-          <span class="ct-card-port">tcp/21</span>
-          <span class="ct-card-help muted">Tracks PORT/PASV to allow the data channel.</span>
+          <span class="ct-card-port">File transfer &middot; tcp/21</span>
+          <span class="ct-card-help muted">Lets FTP clients transfer files in both active and passive mode.</span>
         </span>
       </label>
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_sip" {{if $f.CTHelperSIP}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">SIP</span>
-          <span class="ct-card-port">udp/5060</span>
-          <span class="ct-card-help muted">Opens RTP/RTCP media ports negotiated in SDP.</span>
+          <span class="ct-card-port">VoIP &middot; udp/5060</span>
+          <span class="ct-card-help muted">Lets SIP calls connect audio and video streams correctly.</span>
         </span>
       </label>
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_tftp" {{if $f.CTHelperTFTP}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">TFTP</span>
-          <span class="ct-card-port">udp/69</span>
-          <span class="ct-card-help muted">Trivial FTP — boot images, network device config.</span>
+          <span class="ct-card-port">Network boot &middot; udp/69</span>
+          <span class="ct-card-help muted">Used by routers and switches to fetch firmware and config files.</span>
         </span>
       </label>
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_pptp" {{if $f.CTHelperPPTP}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">PPTP</span>
-          <span class="ct-card-port">tcp/1723</span>
-          <span class="ct-card-help muted">Legacy VPN. Avoid unless you have a hard requirement.</span>
+          <span class="ct-card-port">Legacy VPN &middot; tcp/1723</span>
+          <span class="ct-card-help muted">Old VPN protocol. Only enable if a device explicitly requires it.</span>
         </span>
       </label>
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_irc" {{if $f.CTHelperIRC}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">IRC</span>
-          <span class="ct-card-port">tcp/6667</span>
-          <span class="ct-card-help muted">Allows DCC file transfer / chat side-channels.</span>
+          <span class="ct-card-port">Chat &middot; tcp/6667</span>
+          <span class="ct-card-help muted">Enables DCC file transfers inside IRC sessions.</span>
         </span>
       </label>
       <label class="ct-card">
         <input type="checkbox" name="ct_helper_h323" {{if $f.CTHelperH323}}checked{{end}} />
         <span class="ct-card-body">
           <span class="ct-card-name">H.323</span>
-          <span class="ct-card-port">tcp/1720</span>
-          <span class="ct-card-help muted">Legacy video conferencing (RAS / Q.931).</span>
+          <span class="ct-card-port">Video conf. &middot; tcp/1720</span>
+          <span class="ct-card-help muted">Legacy video conferencing used by older PBX and meeting systems.</span>
         </span>
       </label>
     </div>
   </fieldset>
   <p class="muted small">
-    Compiles into <code>inet zeerak-ct</code>, prerouting priority -200, so
-    helpers attach before any filter decisions in <code>zeerak-presets</code>.
+    Enabled helpers run before any filter rules so secondary connections are
+    tracked correctly. If you’re not sure, leave them off — they’re only
+    needed if users are actively using that protocol.
   </p>
 
   {{end}}
@@ -1028,9 +1029,9 @@
         <option value="udp">udp</option>
       </select>
       <input class="input small" type="number" min="1" max="65535" name="mk_dport" placeholder="5060" aria-label="Destination port" />
-      <input class="input small" type="text"   name="mk_oif"     placeholder="wg0" aria-label="Egress interface" />
-      <input class="input mono"  type="text"   name="mk_daddr"   placeholder="10.50.0.0/16" aria-label="Destination CIDR" />
-      <input class="input"       type="text"   name="mk_comment" placeholder="why?" aria-label="Comment" />
+      <input class="input small" type="text"   name="mk_oif"     placeholder="wg0" aria-label="Send via interface" />
+      <input class="input mono"  type="text"   name="mk_daddr"   placeholder="10.50.0.0/16" aria-label="Destination" />
+      <input class="input"       type="text"   name="mk_comment" placeholder="e.g. route VoIP via ISP2" aria-label="Note" />
       <button type="button" class="row-remove" data-row-remove aria-label="Remove row">×</button>
     </div>
   </template>

@@ -1611,13 +1611,11 @@ input[type="number"].input {
 }
 
 /* topbar network nav: NAT / Marks / CT chips with active-count badges. */
-.topbar-inner > .nav { flex: 0 1 auto; }
 .nav-network {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   padding: 0.15rem;
-  margin-left: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface, #fff);
@@ -1660,10 +1658,6 @@ input[type="number"].input {
 }
 .nav-network .nav-badge-muted {
   background: var(--muted, #6b7280);
-}
-/* Activity nav sits flush right next to the version chip. */
-.topbar-inner > .nav:not(.nav-network) {
-  margin-left: auto;
 }
 @media (max-width: 720px) {
   .nav-network .nav-link { padding: 0.3rem 0.55rem; font-size: 0.8rem; }

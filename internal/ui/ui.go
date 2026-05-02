@@ -773,8 +773,8 @@ var editServiceMeta = map[string]struct {
 	"protection": {"shield", "Default protection", "Block everything that isn't explicitly allowed."},
 	"outbound":   {"upload", "Outbound traffic", "What this machine is allowed to send to the internet."},
 	"nat":        {"upload", "NAT & port forwards", "DNAT inbound ports to internal hosts; SNAT outbound traffic via masquerade."},
-	"marks":      {"upload", "Policy-routing marks", "Tag traffic with fwmarks for split-tunnel VPN, QoS, or custom routing."},
-	"ct":         {"shield", "Conntrack helpers", "Attach kernel helpers (ftp, sip, …) at canonical ports for protocols with secondary connections."},
+	"marks":      {"upload", "Traffic routing rules", "Steer traffic through a specific VPN tunnel, network interface, or routing table."},
+	"ct":         {"shield", "Protocol helpers", "Let older protocols (FTP, SIP, …) open secondary connections through the firewall automatically."},
 }
 
 // presetFormFromPresets seeds a presetForm from the currently applied presets.
